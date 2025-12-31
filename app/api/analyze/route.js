@@ -72,7 +72,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these exact fie
       }
       return NextResponse.json({ 
         error: 'API request failed', 
-        troubleshoot: `Server returned ${response.status}. Try again in a few minutes.`
+        troubleshoot: 'Server returned ' + response.status + '. Try again in a few minutes.'
       }, { status: response.status });
     }
 
@@ -108,4 +108,40 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these exact fie
     if (!analysis.isLegitimate) {
       return NextResponse.json({ 
         error: 'Flagged as not legitimate', 
-        troubleshoot: analysis.legitimacyReason || '
+        troubleshoot: analysis.legitimacyReason || 'Posting may be expired or not a real job',
+        canAddAnyway: true
+      });
+    }
+
+    const job = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      url: jobUrl,
+      directUrl: analysis.directApplicationUrl || jobUrl,
+      title: analysis.jobTitle || 'Unknown Position',
+      company: analysis.company || 'Unknown Company',
+      location: analysis.location || 'Location not specified',
+      grade: analysis.grade || 'good',
+      gradeReason: analysis.gradeReason || '',
+      category: analysis.experienceCategory || 'other',
+      ceoMatch: analysis.ceoMatch || '',
+      salary: analysis.salary || 'Not listed',
+      requiresDiploma: analysis.requiresDiploma || false,
+      requiresLicense: analysis.requiresLicense || false,
+      datePosted: analysis.datePosted || new Date().toISOString().split('T')[0],
+      expirationDate: analysis.expirationDate || null,
+      submittedAt: new Date().toISOString(),
+      submittedBy: 'CEO Fresno Staff',
+      needsReview: false
+    };
+
+    return NextResponse.json({ success: true, job });
+
+  } catch (error) {
+    console.error('Server error:', error);
+    return NextResponse.json({ 
+      error: 'Server error', 
+      troubleshoot: 'An unexpected error occurred. Please try again.',
+      canAddAnyway: true
+    }, { status: 500 });
+  }
+}
