@@ -84,8 +84,8 @@ export default function Home() {
       const { data, error } = await supabase
         .from('jobs')
         .select('*')
-        .gte('date_posted', cutoffDate.toISOString().split('T')[0])
-        .order('date_posted', { ascending: false });
+        .gte('submitted_at', cutoffDate.toISOString())
+        .order('submitted_at', { ascending: false });
 
       if (error) throw error;
       
@@ -183,6 +183,12 @@ export default function Home() {
       const newJobs = []; const errors = [];
       for (let i = 0; i < urls.length; i++) {
         setAnalyzeProgress({ current: i + 1, total: urls.length });
+        
+        // Add delay between requests to avoid rate limiting
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+        }
+        
         const result = await analyzeJobUrl(urls[i], [...existingUrls, ...newJobs.map(j => j.url)]);
         if (result.success) {
           const saved = await saveJob(result.job);
@@ -257,10 +263,10 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getDaysRemaining = (datePosted) => {
-    const posted = new Date(datePosted);
+  const getDaysRemaining = (submittedAt) => {
+    const submitted = new Date(submittedAt);
     const now = new Date();
-    const daysPassed = Math.floor((now - posted) / (1000 * 60 * 60 * 24));
+    const daysPassed = Math.floor((now - submitted) / (1000 * 60 * 60 * 24));
     return JOB_EXPIRY_DAYS - daysPassed;
   };
 
@@ -269,14 +275,14 @@ export default function Home() {
     .filter(job => filterCategories.length === 0 || filterCategories.includes(job.category))
     .filter(job => !filterNoDiploma || !job.requiresDiploma)
     .filter(job => !filterNoLicense || !job.requiresLicense)
-    .filter(job => !filterExpiringSoon || getDaysRemaining(job.datePosted) <= 7)
+    .filter(job => !filterExpiringSoon || getDaysRemaining(job.submittedAt) <= 7)
     .sort((a, b) => {
-      if (sortBy === 'date') return new Date(b.datePosted) - new Date(a.datePosted);
+      if (sortBy === 'date') return new Date(b.submittedAt) - new Date(a.submittedAt);
       if (sortBy === 'grade') {
         const order = ['best', 'better', 'good', 'fair', 'poor'];
         return order.indexOf(a.grade) - order.indexOf(b.grade);
       }
-      if (sortBy === 'expiring') return getDaysRemaining(a.datePosted) - getDaysRemaining(b.datePosted);
+      if (sortBy === 'expiring') return getDaysRemaining(a.submittedAt) - getDaysRemaining(b.submittedAt);
       return 0;
     });
 
@@ -294,8 +300,8 @@ export default function Home() {
     return <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${cat.color}`}>{cat.icon} {cat.label}</span>;
   };
 
-  const ExpiryBadge = ({ datePosted }) => {
-    const daysRemaining = getDaysRemaining(datePosted);
+  const ExpiryBadge = ({ submittedAt }) => {
+    const daysRemaining = getDaysRemaining(submittedAt);
     let colorClass = 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     let label = `${daysRemaining}d left`;
     if (daysRemaining <= 3) { colorClass = 'bg-red-500/20 text-red-400 border-red-500/30'; label = daysRemaining <= 0 ? 'Expiring today' : `${daysRemaining}d left`; }
@@ -432,7 +438,7 @@ export default function Home() {
             </label>
           </div>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2">
-            <option value="date">Sort by Date</option>
+            <option value="date">Sort by Date Added</option>
             <option value="grade">Sort by Grade</option>
             <option value="expiring">Sort by Expiring</option>
           </select>
@@ -460,8 +466,8 @@ export default function Home() {
                     <h3 className="text-white font-semibold text-lg truncate">{job.title}</h3>
                     <p className="text-slate-400 text-sm">{job.company} • {job.location}</p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Posted {new Date(job.datePosted).toLocaleDateString()}</span>
-                      <ExpiryBadge datePosted={job.datePosted} />
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Added {new Date(job.submittedAt).toLocaleDateString()}</span>
+                      <ExpiryBadge submittedAt={job.submittedAt} />
                       {job.salary !== 'Not listed' && <span className="text-emerald-400">{job.salary}</span>}
                     </div>
                     <div className="flex items-center gap-3 mt-2">
@@ -508,7 +514,7 @@ export default function Home() {
 
         <div className="mt-8 text-center text-slate-500 text-xs">
           <p>Center for Employment Opportunities • Fresno, CA</p>
-          <p className="mt-1">Jobs expire after 3 weeks • Shared list updates in real-time</p>
+          <p className="mt-1">Jobs expire 3 weeks after being added • Shared list updates in real-time</p>
         </div>
       </div>
     </div>
