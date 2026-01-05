@@ -34,6 +34,8 @@ export default function Home() {
   const [url, setUrl] = useState('');
   const [bulkUrls, setBulkUrls] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualDescription, setManualDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0 });
@@ -171,6 +173,45 @@ export default function Home() {
     } catch (e) {
       return { error: 'Network error', url: jobUrl, troubleshoot: 'Check your internet connection' };
     }
+  };
+
+  const analyzeManualEntry = async () => {
+    if (!url.trim()) { setError('Please enter the job URL'); return; }
+    if (!manualDescription.trim()) { setError('Please paste the job description'); return; }
+    
+    setAnalyzing(true); setError(''); setSuccess('');
+    
+    try {
+      const response = await fetch('/api/analyze-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url, description: manualDescription })
+      });
+      
+      if (!response.ok) {
+        setError('Analysis failed. Please try again.');
+        setAnalyzing(false);
+        return;
+      }
+      
+      const data = await response.json();
+      if (data.error) {
+        setError(data.error);
+        setAnalyzing(false);
+        return;
+      }
+      
+      const saved = await saveJob(data.job);
+      if (saved) {
+        setUrl('');
+        setManualDescription('');
+        setSuccess(`Successfully added: ${data.job.title} at ${data.job.company}`);
+        loadJobs();
+      }
+    } catch (e) {
+      setError('Failed to analyze. Please try again.');
+    }
+    setAnalyzing(false);
   };
 
   const analyzeJob = async () => {
@@ -328,13 +369,55 @@ export default function Home() {
         <div className="bg-slate-800/50 backdrop-blur rounded-xl p-5 mb-6 border border-slate-700">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-white font-semibold flex items-center gap-2">
-              <Plus className="w-5 h-5 text-emerald-400" />Submit {bulkMode ? 'Multiple Jobs' : 'a Job'}
+              <Plus className="w-5 h-5 text-emerald-400" />Submit {bulkMode ? 'Multiple Jobs' : manualMode ? 'Job (Manual)' : 'a Job'}
             </h2>
-            <button onClick={() => setBulkMode(!bulkMode)} className={`text-xs px-3 py-1.5 rounded-full transition-colors ${bulkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-              {bulkMode ? '← Single URL' : 'Bulk Upload →'}
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setManualMode(!manualMode); setBulkMode(false); }} 
+                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${manualMode ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}
+              >
+                {manualMode ? '← Auto Mode' : 'Manual Entry'}
+              </button>
+              {!manualMode && (
+                <button onClick={() => setBulkMode(!bulkMode)} className={`text-xs px-3 py-1.5 rounded-full transition-colors ${bulkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                  {bulkMode ? '← Single URL' : 'Bulk Upload →'}
+                </button>
+              )}
+            </div>
           </div>
-          {bulkMode ? (
+          
+          {manualMode ? (
+            <div className="space-y-3">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
+                <p className="text-amber-400 font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Manual Entry Mode</p>
+                <p className="text-slate-400 text-xs mt-1">Use this when a job page can't be parsed (like ADP Workforce Now). Paste the job URL and copy/paste the job description from the page.</p>
+              </div>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste job posting URL here..."
+                className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+              <textarea
+                value={manualDescription}
+                onChange={(e) => setManualDescription(e.target.value)}
+                placeholder="Paste the full job description here (copy from the job page)..."
+                rows={6}
+                className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none text-sm"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 text-xs">{manualDescription.length} characters</span>
+                <button
+                  onClick={analyzeManualEntry}
+                  disabled={analyzing}
+                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
+                </button>
+              </div>
+            </div>
+          ) : bulkMode ? (
             <div className="space-y-3">
               <textarea value={bulkUrls} onChange={(e) => setBulkUrls(e.target.value)} placeholder="Paste multiple job URLs (one per line or comma-separated)..." rows={4} className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none font-mono text-sm" />
               <div className="flex items-center justify-between">
