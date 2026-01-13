@@ -1,39 +1,16 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import {
-  Search, Plus, ExternalLink, Trash2, RefreshCw, AlertCircle, CheckCircle,
-  Clock, Users, Filter, GraduationCap, Car, Calendar, Upload, ChevronDown,
-  Check, Edit3, Building2, BookOpen, ArrowRight, Star, Phone, MapPin, Globe
-} from "lucide-react";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const GRADES = {
-  best: { label: "Best", color: "bg-emerald-500", textColor: "text-emerald-400", bgLight: "bg-emerald-500/20", border: "border-emerald-500" },
-  good: { label: "Good", color: "bg-blue-500", textColor: "text-blue-400", bgLight: "bg-blue-500/20", border: "border-blue-500" },
-  fair: { label: "Fair", color: "bg-amber-500", textColor: "text-amber-400", bgLight: "bg-amber-500/20", border: "border-amber-500" },
-  poor: { label: "Poor", color: "bg-red-500", textColor: "text-red-400", bgLight: "bg-red-500/20", border: "border-red-500" }
-};
-
-const CATEGORIES = {
-  construction: { label: "Construction", icon: "🏗️" },
-  warehouse: { label: "Warehouse/Logistics", icon: "📦" },
-  transportation: { label: "Transportation", icon: "🚛" },
-  food_service: { label: "Food Service", icon: "🍽️" },
-  hospitality: { label: "Hospitality", icon: "🏨" },
-  custodial: { label: "Custodial", icon: "🧹" },
-  manufacturing: { label: "Manufacturing", icon: "🏭" },
-  retail: { label: "Retail", icon: "🛒" },
-  other: { label: "Other", icon: "💼" }
-};
-
+// Frequent Hirers detection patterns - expanded to 17 employers
 const FREQUENT_HIRERS = {
-  // Existing 9 employers...
-  walmart: { patterns: ["walmart", "sam's club"], name: "Walmart / Sam's Club", icon: "🛒" },
+  walmart: { patterns: ["walmart", "sam's club", "sams club"], name: "Walmart / Sam's Club", icon: "🛒" },
   amazon: { patterns: ["amazon", "aws", "whole foods"], name: "Amazon", icon: "📦" },
   target: { patterns: ["target"], name: "Target", icon: "🎯" },
   fedex: { patterns: ["fedex", "federal express"], name: "FedEx", icon: "📬" },
@@ -42,8 +19,6 @@ const FREQUENT_HIRERS = {
   pridestaff: { patterns: ["pridestaff"], name: "PrideStaff", icon: "🤝" },
   randstad: { patterns: ["randstad"], name: "Randstad", icon: "🤝" },
   adecco: { patterns: ["adecco"], name: "Adecco", icon: "🤝" },
-  
-  // NEW 8 employers...
   home_depot: { patterns: ["home depot", "homedepot", "the home depot"], name: "Home Depot", icon: "🧰" },
   lowes: { patterns: ["lowe's", "lowes", "lowe"], name: "Lowe's", icon: "🔨" },
   starbucks: { patterns: ["starbucks", "starbucks coffee"], name: "Starbucks", icon: "☕" },
@@ -54,164 +29,159 @@ const FREQUENT_HIRERS = {
   burger_king: { patterns: ["burger king", "burgerking", "bk"], name: "Burger King", icon: "🍔" }
 };
 
-function detectFrequentHirer(company, url) {
-  const searchText = `${company} ${url}`.toLowerCase();
-  for (const [key, hirer] of Object.entries(FREQUENT_HIRERS)) {
-    if (hirer.patterns.some(pattern => searchText.includes(pattern))) {
-      return key;
+// Detect if URL is from Indeed
+const isIndeedUrl = (url) => {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.includes("indeed.com") || 
+         lowerUrl.includes("indeed.ca") || 
+         lowerUrl.includes("indeed.co");
+};
+
+// Detect if URL is from other problematic job sites
+const isProblematicSite = (url) => {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  const problematicDomains = [
+    "workforcenow.adp.com",
+    "workday.com",
+    "myworkday",
+    "taleo.net",
+    "icims.com",
+    "ultipro.com",
+    "paycomonline.net",
+    "lever.co",
+    "greenhouse.io",
+    "jobvite.com",
+    "smartrecruiters.com"
+  ];
+  return problematicDomains.some(domain => lowerUrl.includes(domain));
+};
+
+// Extract job key from Indeed URL if present
+const extractIndeedJobKey = (url) => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.searchParams.get("jk") || null;
+  } catch {
+    return null;
+  }
+};
+
+// Detect frequent hirer from job data
+const detectFrequentHirer = (job) => {
+  const searchText = `${job.company} ${job.title}`.toLowerCase();
+  for (const [slug, data] of Object.entries(FREQUENT_HIRERS)) {
+    if (data.patterns.some(pattern => searchText.includes(pattern))) {
+      return slug;
     }
   }
   return null;
-}
+};
 
-function getDaysUntilExpiration(expirationDate) {
-  if (!expirationDate) return null;
-  const now = new Date();
-  const exp = new Date(expirationDate);
-  const diff = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
-  return diff;
-}
-
-export default function CEOJobBoard() {
-  // Tab state
-  const [activeTab, setActiveTab] = useState("jobs");
-  
-  // Jobs state
+export default function Home() {
   const [jobs, setJobs] = useState([]);
-  const [newUrl, setNewUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [filterGrades, setFilterGrades] = useState([]);
-  const [filterCategories, setFilterCategories] = useState([]);
-  const [filterNoDiploma, setFilterNoDiploma] = useState(false);
-  const [filterNoLicense, setFilterNoLicense] = useState(false);
-  const [filterExpiringSoon, setFilterExpiringSoon] = useState(false);
-  const [gradeDropdownOpen, setGradeDropdownOpen] = useState(false);
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [sortBy, setSortBy] = useState("date");
-  const [bulkMode, setBulkMode] = useState(false);
-  const [bulkUrls, setBulkUrls] = useState("");
-  const [bulkProgress, setBulkProgress] = useState(null);
-  const [manualMode, setManualMode] = useState(false);
-  const [manualUrl, setManualUrl] = useState("");
-  const [manualDescription, setManualDescription] = useState("");
-  const [editingJob, setEditingJob] = useState(null);
-  
-  // Frequent Hirers state
   const [frequentHirers, setFrequentHirers] = useState([]);
+  const [url, setUrl] = useState("");
+  const [bulkUrls, setBulkUrls] = useState("");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualDescription, setManualDescription] = useState("");
+  const [indeedMode, setIndeedMode] = useState(false);
+  const [indeedJobKey, setIndeedJobKey] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("jobs");
   const [selectedHirer, setSelectedHirer] = useState(null);
-  const [hirersLoading, setHirersLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    grade: "all",
+    category: "all",
+    diploma: "all",
+    license: "all"
+  });
+  const [errorLog, setErrorLog] = useState([]);
+  const [showErrorLog, setShowErrorLog] = useState(false);
 
-  // Fetch jobs
+  // Fetch jobs from Supabase
   const fetchJobs = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .order("date_posted", { ascending: false });
-      if (error) throw error;
-      const transformedJobs = (data || []).map(job => ({
-        id: job.id,
-        url: job.url,
-        directUrl: job.direct_url,
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        grade: job.grade,
-        gradeReason: job.grade_reason,
-        category: job.category,
-        ceoMatch: job.ceo_match,
-        salary: job.salary,
-        requiresDiploma: job.requires_diploma,
-        requiresLicense: job.requires_license,
-        datePosted: job.date_posted,
-        expirationDate: job.expiration_date,
-        submittedAt: job.submitted_at,
-        submittedBy: job.submitted_by,
-        needsReview: job.needs_review,
-        frequentHirer: detectFrequentHirer(job.company, job.url)
-      }));
-      setJobs(transformedJobs);
-    } catch (err) {
-      console.error("Error fetching jobs:", err);
-    } finally {
-      setInitialLoad(false);
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .order("submitted_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching jobs:", error);
+    } else {
+      const now = new Date();
+      const activeJobs = (data || []).filter(job => {
+        if (job.expiration_date) {
+          return new Date(job.expiration_date) > now;
+        }
+        const submittedAt = new Date(job.submitted_at);
+        const daysSinceSubmitted = (now - submittedAt) / (1000 * 60 * 60 * 24);
+        return daysSinceSubmitted <= 21;
+      });
+      setJobs(activeJobs);
     }
+    setLoading(false);
   }, []);
 
-  // Fetch frequent hirers
+  // Fetch frequent hirers from Supabase
   const fetchFrequentHirers = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("frequent_hirers")
-        .select("*")
-        .order("display_order", { ascending: true });
-      if (error) throw error;
+    const { data, error } = await supabase
+      .from("frequent_hirers")
+      .select("*")
+      .order("display_order", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching frequent hirers:", error);
+    } else {
       setFrequentHirers(data || []);
-    } catch (err) {
-      console.error("Error fetching frequent hirers:", err);
-    } finally {
-      setHirersLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchJobs();
     fetchFrequentHirers();
+
     const jobsChannel = supabase
       .channel("jobs-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, fetchJobs)
       .subscribe();
+
     const hirersChannel = supabase
       .channel("hirers-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "frequent_hirers" }, fetchFrequentHirers)
       .subscribe();
+
     return () => {
       supabase.removeChannel(jobsChannel);
       supabase.removeChannel(hirersChannel);
     };
   }, [fetchJobs, fetchFrequentHirers]);
 
-  // Auto-clear messages
+  // Watch URL input for Indeed detection
   useEffect(() => {
-    if (error || success) {
-      const timer = setTimeout(() => {
-        setError(null);
-        setSuccess(null);
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (isIndeedUrl(url)) {
+      if (!indeedMode && !manualMode) {
+        setIndeedMode(true);
+        const jobKey = extractIndeedJobKey(url);
+        setIndeedJobKey(jobKey);
+      }
+    } else if (isProblematicSite(url)) {
+      if (!manualMode && !indeedMode) {
+        setManualMode(true);
+      }
     }
-  }, [error, success]);
+  }, [url, indeedMode, manualMode]);
 
-  const analyzeJob = async (url) => {
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url })
-    });
-    const data = await response.json();
-    if (data.error) throw new Error(data.troubleshoot || data.error);
-    return data.job;
-  };
+  // Save job to Supabase
+  const saveJobToSupabase = async (job) => {
+    const hirerSlug = detectFrequentHirer(job);
 
-  const analyzeManualJob = async (url, description) => {
-    const response = await fetch("/api/analyze-manual", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, description })
-    });
-    const data = await response.json();
-    if (data.error) throw new Error(data.troubleshoot || data.error);
-    return data.job;
-  };
-
-  const saveJob = async (job) => {
-    const expirationDate = new Date();
-    expirationDate.setDate(expirationDate.getDate() + 21);
-    const dbJob = {
-      id: job.id,
+    const { error } = await supabase.from("jobs").insert([{
       url: job.url,
       direct_url: job.directUrl,
       title: job.title,
@@ -225,678 +195,848 @@ export default function CEOJobBoard() {
       requires_diploma: job.requiresDiploma,
       requires_license: job.requiresLicense,
       date_posted: job.datePosted,
-      expiration_date: expirationDate.toISOString().split("T")[0],
-      submitted_at: job.submittedAt,
+      expiration_date: job.expirationDate,
       submitted_by: job.submittedBy,
-      needs_review: job.needsReview
-    };
-    const { error } = await supabase.from("jobs").upsert(dbJob, { onConflict: "id" });
-    if (error) throw error;
-  };
+      needs_review: job.needsReview || false,
+      frequent_hirer_slug: hirerSlug
+    }]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newUrl.trim()) return;
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const job = await analyzeJob(newUrl.trim());
-      await saveJob(job);
-      setSuccess(`Added: ${job.title} at ${job.company}`);
-      setNewUrl("");
-      fetchJobs();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error("Error saving job:", error);
+      return false;
     }
+    return true;
   };
 
-  const handleManualSubmit = async (e) => {
-    e.preventDefault();
-    if (!manualUrl.trim() || !manualDescription.trim()) return;
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const job = await analyzeManualJob(manualUrl.trim(), manualDescription.trim());
-      await saveJob(job);
-      setSuccess(`Added: ${job.title} at ${job.company}`);
-      setManualUrl("");
-      setManualDescription("");
-      setManualMode(false);
-      fetchJobs();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  // Handle Indeed-specific submission
+  const handleIndeedSubmit = async () => {
+    if (!url.trim() || !manualDescription.trim()) {
+      setError("Please paste both the Indeed URL and the job description");
+      return;
     }
+
+    setAnalyzing(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/analyze-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: url.trim(),
+          description: manualDescription.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        if (data.troubleshoot) {
+          setErrorLog(prev => [...prev, {
+            time: new Date().toLocaleTimeString(),
+            url: url.trim(),
+            error: data.error,
+            troubleshoot: data.troubleshoot
+          }]);
+        }
+      } else if (data.job) {
+        const saved = await saveJobToSupabase(data.job);
+        if (saved) {
+          setSuccess(`Added: ${data.job.title} at ${data.job.company}`);
+          setUrl("");
+          setManualDescription("");
+          setIndeedMode(false);
+          setIndeedJobKey(null);
+        } else {
+          setError("Failed to save job to database");
+        }
+      }
+    } catch (err) {
+      setError("Failed to analyze job. Please try again.");
+    }
+
+    setAnalyzing(false);
   };
 
+  // Handle manual entry submission
+  const handleManualSubmit = async () => {
+    if (!url.trim() || !manualDescription.trim()) {
+      setError("Please provide both a URL and job description");
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/analyze-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: url.trim(),
+          description: manualDescription.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        if (data.troubleshoot) {
+          setErrorLog(prev => [...prev, {
+            time: new Date().toLocaleTimeString(),
+            url: url.trim(),
+            error: data.error,
+            troubleshoot: data.troubleshoot
+          }]);
+        }
+      } else if (data.job) {
+        const saved = await saveJobToSupabase(data.job);
+        if (saved) {
+          setSuccess(`Added: ${data.job.title} at ${data.job.company}`);
+          setUrl("");
+          setManualDescription("");
+          setManualMode(false);
+        } else {
+          setError("Failed to save job to database");
+        }
+      }
+    } catch (err) {
+      setError("Failed to analyze job. Please try again.");
+    }
+
+    setAnalyzing(false);
+  };
+
+  // Handle single URL submission
+  const handleSubmit = async () => {
+    if (!url.trim()) {
+      setError("Please enter a job URL");
+      return;
+    }
+
+    // Check if Indeed or problematic site - redirect to appropriate mode
+    if (isIndeedUrl(url)) {
+      setIndeedMode(true);
+      setIndeedJobKey(extractIndeedJobKey(url));
+      return;
+    }
+
+    if (isProblematicSite(url)) {
+      setManualMode(true);
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        if (data.troubleshoot) {
+          setErrorLog(prev => [...prev, {
+            time: new Date().toLocaleTimeString(),
+            url: url.trim(),
+            error: data.error,
+            troubleshoot: data.troubleshoot
+          }]);
+        }
+      } else if (data.job) {
+        const saved = await saveJobToSupabase(data.job);
+        if (saved) {
+          setSuccess(`Added: ${data.job.title} at ${data.job.company}`);
+          setUrl("");
+        } else {
+          setError("Failed to save job to database");
+        }
+      }
+    } catch (err) {
+      setError("Failed to analyze job. Please try again.");
+    }
+
+    setAnalyzing(false);
+  };
+
+  // Handle bulk URL submission
   const handleBulkSubmit = async () => {
     const urls = bulkUrls.split("\n").map(u => u.trim()).filter(u => u);
-    if (urls.length === 0) return;
-    setBulkProgress({ current: 0, total: urls.length, results: [] });
-    for (let i = 0; i < urls.length; i++) {
+    if (urls.length === 0) {
+      setError("Please enter at least one URL");
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    setSuccess("");
+
+    let added = 0;
+    let failed = 0;
+    const newErrors = [];
+    const indeedUrls = [];
+
+    for (const jobUrl of urls) {
+      // Separate Indeed URLs for manual handling
+      if (isIndeedUrl(jobUrl) || isProblematicSite(jobUrl)) {
+        indeedUrls.push(jobUrl);
+        continue;
+      }
+
       try {
-        const job = await analyzeJob(urls[i]);
-        await saveJob(job);
-        setBulkProgress(prev => ({
-          ...prev,
-          current: i + 1,
-          results: [...prev.results, { url: urls[i], success: true, title: job.title }]
-        }));
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: jobUrl })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          failed++;
+          newErrors.push({
+            time: new Date().toLocaleTimeString(),
+            url: jobUrl,
+            error: data.error,
+            troubleshoot: data.troubleshoot || "Check the URL and try again"
+          });
+        } else if (data.job) {
+          const saved = await saveJobToSupabase(data.job);
+          if (saved) {
+            added++;
+          } else {
+            failed++;
+          }
+        }
       } catch (err) {
-        setBulkProgress(prev => ({
-          ...prev,
-          current: i + 1,
-          results: [...prev.results, { url: urls[i], success: false, error: err.message }]
-        }));
+        failed++;
+        newErrors.push({
+          time: new Date().toLocaleTimeString(),
+          url: jobUrl,
+          error: "Request failed",
+          troubleshoot: "Network error - try again"
+        });
       }
-      if (i < urls.length - 1) await new Promise(r => setTimeout(r, 2000));
+
+      // Rate limiting delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    fetchJobs();
+
+    setErrorLog(prev => [...prev, ...newErrors]);
+
+    let message = `Added ${added} job${added !== 1 ? "s" : ""}`;
+    if (failed > 0) message += `, ${failed} failed`;
+    if (indeedUrls.length > 0) {
+      message += `. ${indeedUrls.length} Indeed/ADP URL(s) need manual entry.`;
+    }
+    setSuccess(message);
+    setBulkUrls(indeedUrls.join("\n")); // Keep Indeed URLs for manual processing
+    setAnalyzing(false);
   };
 
-  const handleDelete = async (id) => {
-    try {
-      await supabase.from("jobs").delete().eq("id", id);
-      fetchJobs();
-    } catch (err) {
-      setError("Failed to delete job");
+  // Handle "Add Anyway" for failed URLs
+  const handleAddAnyway = async () => {
+    if (!url.trim()) return;
+
+    const job = {
+      url: url.trim(),
+      directUrl: url.trim(),
+      title: "Needs Review",
+      company: "Unknown",
+      location: "Unknown",
+      grade: "good",
+      gradeReason: "Added manually - needs review",
+      category: "other",
+      ceoMatch: "",
+      salary: "Not listed",
+      requiresDiploma: false,
+      requiresLicense: false,
+      datePosted: new Date().toISOString().split("T")[0],
+      expirationDate: null,
+      submittedBy: "CEO Fresno Staff",
+      needsReview: true
+    };
+
+    const saved = await saveJobToSupabase(job);
+    if (saved) {
+      setSuccess("Job added for manual review");
+      setUrl("");
+      setError("");
+      setIndeedMode(false);
+      setManualMode(false);
+    } else {
+      setError("Failed to save job");
     }
   };
 
-  const handleUpdateJob = async (job) => {
-    try {
-      await saveJob(job);
-      setEditingJob(null);
-      fetchJobs();
-      setSuccess("Job updated successfully");
-    } catch (err) {
-      setError("Failed to update job");
-    }
+  // Filter jobs
+  const filteredJobs = jobs.filter(job => {
+    if (filters.grade !== "all" && job.grade !== filters.grade) return false;
+    if (filters.category !== "all" && job.category !== filters.category) return false;
+    if (filters.diploma === "no" && job.requires_diploma) return false;
+    if (filters.diploma === "yes" && !job.requires_diploma) return false;
+    if (filters.license === "no" && job.requires_license) return false;
+    if (filters.license === "yes" && !job.requires_license) return false;
+    return true;
+  });
+
+  const gradeColors = {
+    best: "bg-green-100 text-green-800 border-green-300",
+    better: "bg-blue-100 text-blue-800 border-blue-300",
+    good: "bg-yellow-100 text-yellow-800 border-yellow-300",
+    fair: "bg-orange-100 text-orange-800 border-orange-300",
+    poor: "bg-red-100 text-red-800 border-red-300"
   };
 
-  const filteredJobs = jobs
-    .filter(job => filterGrades.length === 0 || filterGrades.includes(job.grade))
-    .filter(job => filterCategories.length === 0 || filterCategories.includes(job.category))
-    .filter(job => !filterNoDiploma || !job.requiresDiploma)
-    .filter(job => !filterNoLicense || !job.requiresLicense)
-    .filter(job => !filterExpiringSoon || (getDaysUntilExpiration(job.expirationDate) !== null && getDaysUntilExpiration(job.expirationDate) <= 7))
-    .sort((a, b) => {
-      if (sortBy === "grade") {
-        const order = { best: 0, good: 1, fair: 2, poor: 3 };
-        return order[a.grade] - order[b.grade];
-      }
-      if (sortBy === "expiring") {
-        const daysA = getDaysUntilExpiration(a.expirationDate) ?? 999;
-        const daysB = getDaysUntilExpiration(b.expirationDate) ?? 999;
-        return daysA - daysB;
-      }
-      return new Date(b.datePosted) - new Date(a.datePosted);
-    });
+  const categories = ["construction", "warehouse", "transportation", "foodservice", "hospitality", "custodial", "other"];
 
-  // Render Frequent Hirers Guide
-  const renderFrequentHirersGuide = () => {
-    if (selectedHirer) {
-      const hirer = frequentHirers.find(h => h.slug === selectedHirer);
-      if (!hirer) return null;
-      
-      return (
-        <div className="space-y-6">
+  // Reset all modes
+  const resetModes = () => {
+    setBulkMode(false);
+    setManualMode(false);
+    setIndeedMode(false);
+    setIndeedJobKey(null);
+    setManualDescription("");
+    setError("");
+    setSuccess("");
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">CEO Fresno Job Board</h1>
+          <p className="text-gray-600 mt-2">Fair Chance Employment Opportunities</p>
+        </header>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setSelectedHirer(null)}
-            className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors"
+            onClick={() => { setActiveTab("jobs"); setSelectedHirer(null); }}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === "jobs" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
           >
-            <ArrowRight className="w-4 h-4 rotate-180" />
-            Back to all guides
+            Job Listings ({filteredJobs.length})
           </button>
-          
-          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="text-4xl">{hirer.icon}</div>
-              <div>
-                <h2 className="text-2xl font-bold text-white">{hirer.name}</h2>
-                <p className="text-slate-400 mt-1">{hirer.tagline}</p>
-              </div>
+          <button
+            onClick={() => setActiveTab("hirers")}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === "hirers" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
+          >
+            Frequent Hirers ({frequentHirers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("add")}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === "add" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
+          >
+            + Add Jobs
+          </button>
+        </div>
+
+        {/* Add Jobs Tab */}
+        {activeTab === "add" && (
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => resetModes()}
+                className={`px-3 py-1 rounded text-sm ${!bulkMode && !manualMode && !indeedMode ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              >
+                Single URL
+              </button>
+              <button
+                onClick={() => { resetModes(); setBulkMode(true); }}
+                className={`px-3 py-1 rounded text-sm ${bulkMode ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              >
+                Bulk Upload
+              </button>
+              <button
+                onClick={() => { resetModes(); setManualMode(true); }}
+                className={`px-3 py-1 rounded text-sm ${manualMode ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              >
+                Manual Entry
+              </button>
+              <button
+                onClick={() => { resetModes(); setIndeedMode(true); }}
+                className={`px-3 py-1 rounded text-sm ${indeedMode ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              >
+                📋 Indeed Quick Entry
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {hirer.apply_url && (
-                <a
-                  href={hirer.apply_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg transition-colors"
-                >
-                  <Globe className="w-5 h-5" />
-                  Apply Now
-                  <ExternalLink className="w-4 h-4 ml-auto" />
-                </a>
-              )}
-              {hirer.phone && (
-                <a
-                  href={`tel:${hirer.phone}`}
-                  className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg transition-colors"
-                >
-                  <Phone className="w-5 h-5" />
-                  {hirer.phone}
-                </a>
-              )}
-              {hirer.address && (
-                <div className="flex items-center gap-2 bg-slate-700 text-white px-4 py-3 rounded-lg">
-                  <MapPin className="w-5 h-5 flex-shrink-0" />
-                  <span className="text-sm">{hirer.address}</span>
+            {/* Indeed Quick Entry Mode */}
+            {indeedMode && (
+              <div className="space-y-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-purple-900 flex items-center gap-2">
+                    📋 Indeed Quick Entry
+                  </h3>
+                  <p className="text-purple-700 text-sm mt-1">
+                    Indeed blocks automatic reading. Follow these quick steps:
+                  </p>
                 </div>
-              )}
-            </div>
 
-            {hirer.quick_facts && (
-              <div className="bg-slate-900 rounded-lg p-4 mb-6">
-                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                  <Star className="w-5 h-5 text-amber-400" />
-                  Quick Facts
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                  {hirer.quick_facts.map((fact, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span className="text-slate-300">{fact}</span>
-                    </div>
-                  ))}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Step 1: URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Step 1: Paste Indeed URL
+                    </label>
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://www.indeed.com/viewjob?jk=..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    {indeedJobKey && (
+                      <p className="text-xs text-green-600 mt-1">✓ Job ID detected: {indeedJobKey}</p>
+                    )}
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                    <p className="font-medium text-gray-900 mb-2">Step 2: Copy job details</p>
+                    <ol className="list-decimal list-inside text-gray-600 space-y-1">
+                      <li>Open the Indeed job in a new tab</li>
+                      <li>Scroll to see the full description</li>
+                      <li>Select all text (Ctrl+A / Cmd+A)</li>
+                      <li>Copy (Ctrl+C / Cmd+C)</li>
+                      <li>Paste below</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Step 3: Paste description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Step 3: Paste job description here
+                  </label>
+                  <textarea
+                    value={manualDescription}
+                    onChange={(e) => setManualDescription(e.target.value)}
+                    placeholder="Paste the entire job posting here... Include job title, company name, location, requirements, and description."
+                    rows={8}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                  />
+                  {manualDescription.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {manualDescription.length} characters pasted
+                      {manualDescription.length < 100 && " (paste more for better analysis)"}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleIndeedSubmit}
+                    disabled={analyzing || !url.trim() || !manualDescription.trim()}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {analyzing ? "Analyzing..." : "Analyze & Add Job"}
+                  </button>
+                  <button
+                    onClick={handleAddAnyway}
+                    disabled={!url.trim()}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                  >
+                    Add for Manual Review
+                  </button>
                 </div>
               </div>
             )}
 
-            <div 
-              className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-blue-400"
-              dangerouslySetInnerHTML={{ __html: hirer.guide_html }}
-            />
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6">
-        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl p-6 border border-blue-800">
-          <h2 className="text-xl font-bold text-white mb-2">📋 Application Survival Guides</h2>
-          <p className="text-slate-300">
-            Step-by-step guides for high-volume employers. Each guide covers exactly how to apply, 
-            what assessments to expect, common tech pitfalls, and tips for success.
-          </p>
-        </div>
-
-        {hirersLoading ? (
-          <div className="text-center py-12 text-slate-400">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />
-            Loading guides...
-          </div>
-        ) : frequentHirers.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No guides available yet.</p>
-            <p className="text-sm mt-2">Run the database seed script to add employer guides.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {frequentHirers.map(hirer => (
-              <button
-                key={hirer.slug}
-                onClick={() => setSelectedHirer(hirer.slug)}
-                className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 rounded-xl p-5 text-left transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="text-3xl">{hirer.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
-                      {hirer.name}
-                    </h3>
-                    <p className="text-sm text-slate-400 mt-1 line-clamp-2">{hirer.tagline}</p>
-                    {hirer.category && (
-                      <span className="inline-block mt-2 text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
-                        {hirer.category}
-                      </span>
-                    )}
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
+            {/* Regular Manual Entry Mode */}
+            {manualMode && !indeedMode && (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-amber-900">Manual Entry Mode</h3>
+                  <p className="text-amber-700 text-sm mt-1">
+                    For sites that block automatic reading (ADP, Workday, Taleo, etc.)
+                  </p>
                 </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            CEO Fresno Fair Chance Job Board
-          </h1>
-          <p className="text-slate-400 mt-2">AI-powered job analysis for reentry employment</p>
-        </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Job URL</label>
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 bg-slate-800 p-1 rounded-lg w-fit">
-          <button
-            onClick={() => setActiveTab("jobs")}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
-              activeTab === "jobs"
-                ? "bg-blue-600 text-white"
-                : "text-slate-400 hover:text-white hover:bg-slate-700"
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            Job Board
-            <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">
-              {jobs.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab("guides")}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
-              activeTab === "guides"
-                ? "bg-blue-600 text-white"
-                : "text-slate-400 hover:text-white hover:bg-slate-700"
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            Frequent Hirers
-            <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">
-              {frequentHirers.length}
-            </span>
-          </button>
-        </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Paste Job Description
+                  </label>
+                  <textarea
+                    value={manualDescription}
+                    onChange={(e) => setManualDescription(e.target.value)}
+                    placeholder="Copy and paste the entire job posting here..."
+                    rows={8}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-        {/* Messages */}
-        {error && (
-          <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-red-200 font-medium">Error</p>
-              <p className="text-red-300 text-sm">{error}</p>
-            </div>
-          </div>
-        )}
-        {success && (
-          <div className="bg-emerald-900/50 border border-emerald-500 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <p className="text-emerald-200">{success}</p>
-          </div>
-        )}
-
-        {activeTab === "guides" ? (
-          renderFrequentHirersGuide()
-        ) : (
-          <>
-            {/* Add Job Section */}
-            <div className="bg-slate-800 rounded-xl p-6 mb-6 border border-slate-700">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Plus className="w-5 h-5" /> Add Job
-                </h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => { setManualMode(false); setBulkMode(!bulkMode); }}
-                    className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${bulkMode ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+                    onClick={handleManualSubmit}
+                    disabled={analyzing || !url.trim() || !manualDescription.trim()}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    <Upload className="w-4 h-4" /> Bulk Upload
+                    {analyzing ? "Analyzing..." : "Analyze & Add"}
                   </button>
                   <button
-                    onClick={() => { setBulkMode(false); setManualMode(!manualMode); }}
-                    className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${manualMode ? "bg-purple-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+                    onClick={handleAddAnyway}
+                    disabled={!url.trim()}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                   >
-                    <Edit3 className="w-4 h-4" /> Manual Entry
+                    Add Anyway
                   </button>
                 </div>
               </div>
+            )}
 
-              {bulkMode ? (
-                <div className="space-y-4">
+            {/* Bulk Mode */}
+            {bulkMode && !indeedMode && !manualMode && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Paste URLs (one per line)
+                  </label>
                   <textarea
                     value={bulkUrls}
                     onChange={(e) => setBulkUrls(e.target.value)}
-                    placeholder="Paste job URLs (one per line)..."
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 h-32 resize-none"
+                    placeholder="https://example.com/job1&#10;https://example.com/job2&#10;https://example.com/job3"
+                    rows={6}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
                   />
-                  <button
-                    onClick={handleBulkSubmit}
-                    disabled={bulkProgress !== null}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors"
-                  >
-                    {bulkProgress ? `Processing ${bulkProgress.current}/${bulkProgress.total}...` : "Analyze All"}
-                  </button>
-                  {bulkProgress && bulkProgress.current === bulkProgress.total && (
-                    <div className="mt-4 space-y-2">
-                      {bulkProgress.results.map((r, i) => (
-                        <div key={i} className={`text-sm p-2 rounded ${r.success ? "bg-emerald-900/30 text-emerald-300" : "bg-red-900/30 text-red-300"}`}>
-                          {r.success ? `✓ ${r.title}` : `✗ ${r.error}`}
-                        </div>
-                      ))}
-                      <button onClick={() => { setBulkProgress(null); setBulkUrls(""); }} className="text-sm text-slate-400 hover:text-white">
-                        Clear results
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Note: Indeed and ADP URLs will be separated for manual entry
+                  </p>
                 </div>
-              ) : manualMode ? (
-                <form onSubmit={handleManualSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Job URL</label>
-                    <input
-                      type="url"
-                      value={manualUrl}
-                      onChange={(e) => setManualUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Job Description (copy & paste from the job page)</label>
-                    <textarea
-                      value={manualDescription}
-                      onChange={(e) => setManualDescription(e.target.value)}
-                      placeholder="Paste the full job description here..."
-                      className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 h-40 resize-none"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loading || !manualUrl.trim() || !manualDescription.trim()}
-                    className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...</> : "Analyze Manual Entry"}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleSubmit} className="flex gap-3">
+                <button
+                  onClick={handleBulkSubmit}
+                  disabled={analyzing}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {analyzing ? "Processing..." : "Analyze All"}
+                </button>
+              </div>
+            )}
+
+            {/* Single URL Mode */}
+            {!bulkMode && !manualMode && !indeedMode && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Job URL</label>
                   <input
                     type="url"
-                    value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
-                    placeholder="Paste job posting URL..."
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tip: Indeed URLs auto-switch to Quick Entry mode
+                  </p>
+                </div>
+                <div className="flex gap-2">
                   <button
-                    type="submit"
-                    disabled={loading || !newUrl.trim()}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                    onClick={handleSubmit}
+                    disabled={analyzing}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
                   >
-                    {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...</> : <><Search className="w-4 h-4" /> Analyze</>}
+                    {analyzing ? "Analyzing..." : "Add Job"}
                   </button>
-                </form>
-              )}
-            </div>
+                  {error && (
+                    <button
+                      onClick={handleAddAnyway}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Add Anyway
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
+            {/* Error/Success Messages */}
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
+                {success}
+              </div>
+            )}
+
+            {/* Error Log */}
+            {errorLog.length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowErrorLog(!showErrorLog)}
+                  className="text-sm text-gray-600 hover:text-gray-900"
+                >
+                  {showErrorLog ? "Hide" : "Show"} Error Log ({errorLog.length})
+                </button>
+                {showErrorLog && (
+                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                    {errorLog.map((log, i) => (
+                      <div key={i} className="text-xs p-2 bg-gray-50 rounded">
+                        <span className="text-gray-500">{log.time}</span>
+                        <span className="ml-2 text-red-600">{log.error}</span>
+                        <p className="text-gray-600 truncate">{log.url}</p>
+                        {log.troubleshoot && (
+                          <p className="text-blue-600 mt-1">💡 {log.troubleshoot}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Frequent Hirers Tab */}
+        {activeTab === "hirers" && (
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            {selectedHirer ? (
+              <div>
+                <button
+                  onClick={() => setSelectedHirer(null)}
+                  className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  ← Back to all hirers
+                </button>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-4xl">{selectedHirer.icon}</span>
+                  <div>
+                    <h2 className="text-2xl font-bold">{selectedHirer.name}</h2>
+                    <p className="text-gray-600">{selectedHirer.tagline}</p>
+                  </div>
+                </div>
+                {selectedHirer.quick_facts && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {selectedHirer.quick_facts.map((fact, i) => (
+                      <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm">
+                        {fact}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {selectedHirer.apply_url && (
+                  <a
+                    href={selectedHirer.apply_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mb-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Apply Now →
+                  </a>
+                )}
+                <div
+                  className="prose max-w-none"
+                  dangerouslySetInnerHTML={{ __html: selectedHirer.guide_html }}
+                />
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Frequent Hirers - Application Guides</h2>
+                <p className="text-gray-600 mb-6">
+                  Step-by-step guides for employers who regularly hire CEO participants
+                </p>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {frequentHirers.map((hirer) => (
+                    <button
+                      key={hirer.slug}
+                      onClick={() => setSelectedHirer(hirer)}
+                      className="p-4 border rounded-lg hover:bg-gray-50 text-left transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{hirer.icon}</span>
+                        <div>
+                          <h3 className="font-semibold">{hirer.name}</h3>
+                          <p className="text-sm text-gray-500">{hirer.category}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm text-gray-600 line-clamp-2">{hirer.tagline}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Jobs Tab */}
+        {activeTab === "jobs" && (
+          <>
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-6 items-center">
-              {/* Grade Filter */}
-              <div className="relative">
-                <button
-                  onClick={() => { setGradeDropdownOpen(!gradeDropdownOpen); setCategoryDropdownOpen(false); }}
-                  className="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:border-slate-500 transition-colors"
-                >
-                  <Filter className="w-4 h-4" />
-                  Grade {filterGrades.length > 0 && `(${filterGrades.length})`}
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {gradeDropdownOpen && (
-                  <div className="absolute top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg p-2 z-10 min-w-[150px]">
-                    {Object.entries(GRADES).map(([key, grade]) => (
-                      <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 rounded cursor-pointer">
-                        <input type="checkbox" checked={filterGrades.includes(key)} onChange={(e) => e.target.checked ? setFilterGrades([...filterGrades, key]) : setFilterGrades(filterGrades.filter(g => g !== key))} className="w-4 h-4 rounded" />
-                        <span className={`w-3 h-3 rounded-full ${grade.color}`}></span>
-                        <span className="text-slate-300 text-sm">{grade.label}</span>
-                      </label>
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Grade</label>
+                  <select
+                    value={filters.grade}
+                    onChange={(e) => setFilters({ ...filters, grade: e.target.value })}
+                    className="px-3 py-1 border rounded-lg text-sm"
+                  >
+                    <option value="all">All Grades</option>
+                    <option value="best">Best</option>
+                    <option value="better">Better</option>
+                    <option value="good">Good</option>
+                    <option value="fair">Fair</option>
+                    <option value="poor">Poor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Category</label>
+                  <select
+                    value={filters.category}
+                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                    className="px-3 py-1 border rounded-lg text-sm"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Category Filter */}
-              <div className="relative">
-                <button
-                  onClick={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setGradeDropdownOpen(false); }}
-                  className="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:border-slate-500 transition-colors"
-                >
-                  <Building2 className="w-4 h-4" />
-                  Category {filterCategories.length > 0 && `(${filterCategories.length})`}
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {categoryDropdownOpen && (
-                  <div className="absolute top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg p-2 z-10 min-w-[200px]">
-                    {Object.entries(CATEGORIES).map(([key, cat]) => (
-                      <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 rounded cursor-pointer">
-                        <input type="checkbox" checked={filterCategories.includes(key)} onChange={(e) => e.target.checked ? setFilterCategories([...filterCategories, key]) : setFilterCategories(filterCategories.filter(c => c !== key))} className="w-4 h-4 rounded" />
-                        <span className="text-slate-300 text-sm">{cat.icon} {cat.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Requirement Filters */}
-              <div className="flex items-center gap-4 px-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={filterNoDiploma} onChange={(e) => setFilterNoDiploma(e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-slate-300 text-sm flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5" />No Diploma</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={filterNoLicense} onChange={(e) => setFilterNoLicense(e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-slate-300 text-sm flex items-center gap-1"><Car className="w-3.5 h-3.5" />No License</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={filterExpiringSoon} onChange={(e) => setFilterExpiringSoon(e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-slate-300 text-sm flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Expiring Soon</span>
-                </label>
-              </div>
-
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2">
-                <option value="date">Sort by Date</option>
-                <option value="grade">Sort by Grade</option>
-                <option value="expiring">Sort by Expiring</option>
-              </select>
-
-              <div className="ml-auto text-slate-400 text-sm flex items-center gap-2">
-                <Users className="w-4 h-4" />{filteredJobs.length} jobs
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Diploma Required</label>
+                  <select
+                    value={filters.diploma}
+                    onChange={(e) => setFilters({ ...filters, diploma: e.target.value })}
+                    className="px-3 py-1 border rounded-lg text-sm"
+                  >
+                    <option value="all">Any</option>
+                    <option value="no">No Diploma Required</option>
+                    <option value="yes">Diploma Required</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">License Required</label>
+                  <select
+                    value={filters.license}
+                    onChange={(e) => setFilters({ ...filters, license: e.target.value })}
+                    className="px-3 py-1 border rounded-lg text-sm"
+                  >
+                    <option value="all">Any</option>
+                    <option value="no">No License Required</option>
+                    <option value="yes">License Required</option>
+                  </select>
+                </div>
               </div>
             </div>
 
             {/* Job List */}
-            <div className="space-y-3">
-              {initialLoad ? (
-                <div className="text-center py-12 text-slate-400">
-                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />Loading...
-                </div>
-              ) : filteredJobs.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No jobs found matching your filters.</p>
-                </div>
-              ) : (
-                filteredJobs.map(job => {
-                  const days = getDaysUntilExpiration(job.expirationDate);
-                  const grade = GRADES[job.grade] || GRADES.good;
-                  const category = CATEGORIES[job.category] || CATEGORIES.other;
-                  const frequentHirerInfo = job.frequentHirer ? FREQUENT_HIRERS[job.frequentHirer] : null;
-                  const hasGuide = frequentHirerInfo && frequentHirers.some(h => h.slug === job.frequentHirer);
-
-                  return (
-                    <div key={job.id} className={`bg-slate-800 rounded-xl p-5 border ${days !== null && days <= 3 ? "border-red-500/50" : "border-slate-700"} hover:border-slate-600 transition-colors`}>
-                      <div className="flex items-start gap-4">
-                        <div className={`w-2 h-full min-h-[60px] rounded-full ${grade.color}`}></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <h3 className="text-lg font-semibold text-white truncate">{job.title}</h3>
-                              <p className="text-slate-400 flex items-center gap-2 flex-wrap">
-                                {job.company}
-                                {job.location && <span className="text-slate-500">• {job.location}</span>}
-                                {hasGuide && (
-                                  <button
-                                    onClick={() => { setSelectedHirer(job.frequentHirer); setActiveTab("guides"); }}
-                                    className="inline-flex items-center gap-1 text-xs bg-blue-600/30 text-blue-300 px-2 py-0.5 rounded-full hover:bg-blue-600/50 transition-colors"
-                                  >
-                                    <BookOpen className="w-3 h-3" />
-                                    View Guide
-                                  </button>
-                                )}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${grade.bgLight} ${grade.textColor}`}>
-                                {grade.label}
-                              </span>
-                              <span className="text-slate-500 text-sm">{category.icon}</span>
-                            </div>
-                          </div>
-
-                          {job.gradeReason && (
-                            <p className="text-sm text-slate-500 mt-2 line-clamp-2">{job.gradeReason}</p>
-                          )}
-
-                          <div className="flex items-center gap-4 mt-3 flex-wrap">
-                            <div className="flex items-center gap-3 text-xs">
-                              <span className={`flex items-center gap-1 px-2 py-1 rounded border ${job.requiresDiploma ? "bg-amber-500/20 border-amber-500 text-amber-400" : "border-slate-600 text-slate-500"}`}>
-                                <GraduationCap className="w-3 h-3" />
-                                {job.requiresDiploma ? "Diploma Required" : "No Diploma"}
-                              </span>
-                              <span className={`flex items-center gap-1 px-2 py-1 rounded border ${job.requiresLicense ? "bg-amber-500/20 border-amber-500 text-amber-400" : "border-slate-600 text-slate-500"}`}>
-                                <Car className="w-3 h-3" />
-                                {job.requiresLicense ? "License Required" : "No License"}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-4 text-xs text-slate-500 ml-auto">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                Posted {new Date(job.datePosted).toLocaleDateString()}
-                              </span>
-                              {days !== null && (
-                                <span className={`flex items-center gap-1 ${days <= 3 ? "text-red-400" : days <= 7 ? "text-amber-400" : "text-slate-500"}`}>
-                                  <Clock className="w-3 h-3" />
-                                  {days <= 0 ? "Expired" : `${days}d left`}
-                                </span>
-                              )}
-                              {job.salary && job.salary !== "Not listed" && (
-                                <span className="text-emerald-400">{job.salary}</span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 mt-3">
-                            <a
-                              href={job.directUrl || job.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
-                            >
-                              <ExternalLink className="w-4 h-4" /> View Job
-                            </a>
-                            <button
-                              onClick={() => setEditingJob(job)}
-                              className="text-slate-400 hover:text-white text-sm flex items-center gap-1 ml-4"
-                            >
-                              <Edit3 className="w-4 h-4" /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(job.id)}
-                              className="text-slate-400 hover:text-red-400 text-sm flex items-center gap-1 ml-2"
-                            >
-                              <Trash2 className="w-4 h-4" /> Delete
-                            </button>
-                          </div>
-                        </div>
+            {loading ? (
+              <div className="text-center py-12 text-gray-500">Loading jobs...</div>
+            ) : filteredJobs.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                No jobs match your filters. Try adjusting the filters above.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredJobs.map((job) => (
+                  <div key={job.id} className="bg-white rounded-xl shadow-sm p-6">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{job.title}</h3>
+                        <p className="text-gray-600">{job.company} • {job.location}</p>
                       </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium border ${gradeColors[job.grade] || gradeColors.good}`}>
+                        {job.grade?.toUpperCase()}
+                      </span>
                     </div>
-                  );
-                })
-              )}
-            </div>
+
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                        {job.category}
+                      </span>
+                      {job.salary && job.salary !== "Not listed" && (
+                        <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">
+                          {job.salary}
+                        </span>
+                      )}
+                      {job.requires_diploma && (
+                        <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs">
+                          Diploma Required
+                        </span>
+                      )}
+                      {job.requires_license && (
+                        <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs">
+                          License Required
+                        </span>
+                      )}
+                      {job.needs_review && (
+                        <span className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">
+                          Needs Review
+                        </span>
+                      )}
+                      {job.frequent_hirer_slug && (
+                        <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs">
+                          {FREQUENT_HIRERS[job.frequent_hirer_slug]?.icon} Frequent Hirer
+                        </span>
+                      )}
+                    </div>
+
+                    {job.grade_reason && (
+                      <p className="text-sm text-gray-600 mb-3">{job.grade_reason}</p>
+                    )}
+
+                    {job.ceo_match && (
+                      <p className="text-sm text-blue-700 bg-blue-50 p-2 rounded mb-3">
+                        <strong>CEO Match:</strong> {job.ceo_match}
+                      </p>
+                    )}
+
+                    <div className="flex gap-3">
+                      <a
+                        href={job.direct_url || job.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                      >
+                        Apply Now →
+                      </a>
+                      {job.frequent_hirer_slug && frequentHirers.find(h => h.slug === job.frequent_hirer_slug) && (
+                        <button
+                          onClick={() => {
+                            setSelectedHirer(frequentHirers.find(h => h.slug === job.frequent_hirer_slug));
+                            setActiveTab("hirers");
+                          }}
+                          className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm"
+                        >
+                          View Hiring Guide
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-400 mt-3">
+                      Added {new Date(job.submitted_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
-
-        {/* Edit Modal */}
-        {editingJob && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <h3 className="text-xl font-bold mb-4">Edit Job</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Title</label>
-                  <input
-                    type="text"
-                    value={editingJob.title}
-                    onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Company</label>
-                  <input
-                    type="text"
-                    value={editingJob.company}
-                    onChange={(e) => setEditingJob({ ...editingJob, company: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Grade</label>
-                  <select
-                    value={editingJob.grade}
-                    onChange={(e) => setEditingJob({ ...editingJob, grade: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
-                  >
-                    {Object.entries(GRADES).map(([key, grade]) => (
-                      <option key={key} value={key}>{grade.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingJob.requiresDiploma}
-                      onChange={(e) => setEditingJob({ ...editingJob, requiresDiploma: e.target.checked })}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-slate-300">Requires Diploma</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingJob.requiresLicense}
-                      onChange={(e) => setEditingJob({ ...editingJob, requiresLicense: e.target.checked })}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-slate-300">Requires License</span>
-                  </label>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => handleUpdateJob(editingJob)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition-colors"
-                >
-                  Save Changes
-                </button>
-                <button
-                  onClick={() => setEditingJob(null)}
-                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+    </main>
   );
 }
