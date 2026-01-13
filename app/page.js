@@ -31,53 +31,27 @@ const CATEGORIES = {
   other: { label: "Other", icon: "💼" }
 };
 
-// Frequent Hirer detection patterns
 const FREQUENT_HIRERS = {
-  walmart: {
-    patterns: ["walmart", "sam's club", "sams club"],
-    name: "Walmart / Sam's Club",
-    icon: "🛒"
-  },
-  amazon: {
-    patterns: ["amazon", "aws", "whole foods"],
-    name: "Amazon",
-    icon: "📦"
-  },
-  target: {
-    patterns: ["target"],
-    name: "Target",
-    icon: "🎯"
-  },
-  fedex: {
-    patterns: ["fedex", "fed ex", "federal express"],
-    name: "FedEx",
-    icon: "📬"
-  },
-  ups: {
-    patterns: ["ups", "united parcel"],
-    name: "UPS",
-    icon: "📦"
-  },
-  foster_farms: {
-    patterns: ["foster farms", "fosterfarms"],
-    name: "Foster Farms",
-    icon: "🐔"
-  },
-  pridestaff: {
-    patterns: ["pridestaff", "pride staff"],
-    name: "PrideStaff",
-    icon: "🤝"
-  },
-  randstad: {
-    patterns: ["randstad"],
-    name: "Randstad",
-    icon: "🤝"
-  },
-  adecco: {
-    patterns: ["adecco"],
-    name: "Adecco",
-    icon: "🤝"
-  }
+  // Existing 9 employers...
+  walmart: { patterns: ["walmart", "sam's club"], name: "Walmart / Sam's Club", icon: "🛒" },
+  amazon: { patterns: ["amazon", "aws", "whole foods"], name: "Amazon", icon: "📦" },
+  target: { patterns: ["target"], name: "Target", icon: "🎯" },
+  fedex: { patterns: ["fedex", "federal express"], name: "FedEx", icon: "📬" },
+  ups: { patterns: ["ups", "united parcel"], name: "UPS", icon: "📦" },
+  foster_farms: { patterns: ["foster farms"], name: "Foster Farms", icon: "🐔" },
+  pridestaff: { patterns: ["pridestaff"], name: "PrideStaff", icon: "🤝" },
+  randstad: { patterns: ["randstad"], name: "Randstad", icon: "🤝" },
+  adecco: { patterns: ["adecco"], name: "Adecco", icon: "🤝" },
+  
+  // NEW 8 employers...
+  home_depot: { patterns: ["home depot", "homedepot", "the home depot"], name: "Home Depot", icon: "🧰" },
+  lowes: { patterns: ["lowe's", "lowes", "lowe"], name: "Lowe's", icon: "🔨" },
+  starbucks: { patterns: ["starbucks", "starbucks coffee"], name: "Starbucks", icon: "☕" },
+  mcdonalds: { patterns: ["mcdonald's", "mcdonalds", "mcd"], name: "McDonald's", icon: "🍟" },
+  kroger: { patterns: ["kroger", "food 4 less", "food4less", "ralphs", "fred meyer"], name: "Kroger / Food 4 Less", icon: "🛒" },
+  goodwill: { patterns: ["goodwill", "goodwill industries"], name: "Goodwill Industries", icon: "💚" },
+  taco_bell: { patterns: ["taco bell", "tacobell"], name: "Taco Bell", icon: "🌮" },
+  burger_king: { patterns: ["burger king", "burgerking", "bk"], name: "Burger King", icon: "🍔" }
 };
 
 function detectFrequentHirer(company, url) {
