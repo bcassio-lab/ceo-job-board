@@ -35,87 +35,87 @@ const CATEGORIES = {
 const FREQUENT_HIRERS = {
   walmart: {
     patterns: ["walmart", "sam's club", "sams club"],
-    name: "Walmart / Sam's Club",
+    name: "Walmart / Sam's Club
     icon: "🛒"
   },
   amazon: {
     patterns: ["amazon", "aws", "whole foods"],
-    name: "Amazon",
+    name: "Amazon
     icon: "📦"
   },
   target: {
     patterns: ["target"],
-    name: "Target",
+    name: "Target
     icon: "🎯"
   },
   fedex: {
     patterns: ["fedex", "fed ex", "federal express"],
-    name: "FedEx",
+    name: "FedEx
     icon: "📬"
   },
   ups: {
     patterns: ["ups", "united parcel"],
-    name: "UPS",
+    name: "UPS
     icon: "📦"
   },
   foster_farms: {
     patterns: ["foster farms", "fosterfarms"],
-    name: "Foster Farms",
+    name: "Foster Farms
     icon: "🐔"
   },
   pridestaff: {
     patterns: ["pridestaff", "pride staff"],
-    name: "PrideStaff",
+    name: "PrideStaff
     icon: "🤝"
   },
   randstad: {
     patterns: ["randstad"],
-    name: "Randstad",
+    name: "Randstad
     icon: "🤝"
   },
   adecco: {
     patterns: ["adecco"],
-    name: "Adecco",
+    name: "Adecco
     icon: "🤝"
   },
   home_depot: {
     patterns: ["home depot", "homedepot", "the home depot"],
-    name: "Home Depot",
+    name: "Home Depot
     icon: "🧰"
   },
   lowes: {
     patterns: ["lowe's", "lowes", "lowe"],
-    name: "Lowe's",
+    name: "Lowe's
     icon: "🔨"
   },
   starbucks: {
     patterns: ["starbucks", "starbucks coffee"],
-    name: "Starbucks",
+    name: "Starbucks
     icon: "☕"
   },
   mcdonalds: {
     patterns: ["mcdonald's", "mcdonalds", "mcd"],
-    name: "McDonald's",
+    name: "McDonald's
     icon: "🍟"
   },
   kroger: {
     patterns: ["kroger", "food 4 less", "food4less", "ralphs", "fred meyer"],
-    name: "Kroger / Food 4 Less",
+    name: "Kroger / Food 4 Less
     icon: "🛒"
   },
   goodwill: {
     patterns: ["goodwill", "goodwill industries"],
-    name: "Goodwill Industries",
+    name: "Goodwill Industries
     icon: "💚"
   },
   taco_bell: {
     patterns: ["taco bell", "tacobell"],
-    name: "Taco Bell",
+    name: "Taco Bell
     icon: "🌮"
   },
   burger_king: {
     patterns: ["burger king", "burgerking", "bk"],
-    name: "Burger King",
+    name: "Burger King
     icon: "🍔"
   }
 };
@@ -253,7 +253,7 @@ export default function CEOJobBoard() {
 
   const analyzeJob = async (url) => {
     const response = await fetch("/api/analyze", {
-      method: "POST",
+      method: "POST
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url })
     });
@@ -264,7 +264,7 @@ export default function CEOJobBoard() {
 
   const analyzeManualJob = async (url, description) => {
     const response = await fetch("/api/analyze-manual", {
-      method: "POST",
+      method: "POST
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, description })
     });
@@ -967,12 +967,3 @@ export default function CEOJobBoard() {
     </div>
   );
 }
-",
-      "description": "Creating the updated page.js with Frequent Hirers integration"
-    },
-    "message": "Creating the updated page.js with Frequent Hirers integration",
-    "integration_name": null,
-    "integration_icon_url": null,
-    "context": null,
-    "display_content": {
-      "type": "json_block
