@@ -1,48 +1,114 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { Search, Plus, ExternalLink, Trash2, RefreshCw, Calendar, Award, AlertCircle, CheckCircle, Users, Briefcase, ChevronDown, ChevronUp, Share2, Check, GraduationCap, Car, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
+import {
+  Search, Plus, ExternalLink, Trash2, RefreshCw, AlertCircle, CheckCircle,
+  Clock, Users, Filter, GraduationCap, Car, Calendar, Upload, ChevronDown,
+  Check, Edit3, Building2, BookOpen, ArrowRight, Star, Phone, MapPin, Globe
+} from "lucide-react";
 
-// Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const JOB_EXPIRY_DAYS = 21;
-
-const EXPERIENCE_CATEGORIES = {
-  construction: { label: 'Construction/Trades', color: 'bg-orange-100 text-orange-800', icon: '🔨' },
-  warehouse: { label: 'Warehouse/Logistics', color: 'bg-blue-100 text-blue-800', icon: '📦' },
-  transportation: { label: 'Transportation/CDL', color: 'bg-purple-100 text-purple-800', icon: '🚛' },
-  foodservice: { label: 'Food Service', color: 'bg-green-100 text-green-800', icon: '🍽️' },
-  hospitality: { label: 'Hospitality', color: 'bg-pink-100 text-pink-800', icon: '🏨' },
-  custodial: { label: 'Custodial/Maintenance', color: 'bg-teal-100 text-teal-800', icon: '🧹' },
-  other: { label: 'Other Entry-Level', color: 'bg-gray-100 text-gray-800', icon: '💼' }
+const GRADES = {
+  best: { label: "Best", color: "bg-emerald-500", textColor: "text-emerald-400", bgLight: "bg-emerald-500/20", border: "border-emerald-500" },
+  good: { label: "Good", color: "bg-blue-500", textColor: "text-blue-400", bgLight: "bg-blue-500/20", border: "border-blue-500" },
+  fair: { label: "Fair", color: "bg-amber-500", textColor: "text-amber-400", bgLight: "bg-amber-500/20", border: "border-amber-500" },
+  poor: { label: "Poor", color: "bg-red-500", textColor: "text-red-400", bgLight: "bg-red-500/20", border: "border-red-500" }
 };
 
-const GRADE_INFO = {
-  best: { label: 'Best', color: 'bg-emerald-500', textColor: 'text-emerald-700', desc: 'Fair Chance Encouraged', stars: 5 },
-  better: { label: 'Better', color: 'bg-green-400', textColor: 'text-green-700', desc: 'Public EEO Statement', stars: 4 },
-  good: { label: 'Good', color: 'bg-yellow-400', textColor: 'text-yellow-700', desc: 'No Background Check Mentioned', stars: 3 },
-  fair: { label: 'Fair', color: 'bg-orange-400', textColor: 'text-orange-700', desc: 'Background Check - Some Felonies OK', stars: 2 },
-  poor: { label: 'Poor', color: 'bg-red-400', textColor: 'text-red-700', desc: 'Not Recommended for Backgrounds', stars: 1 }
+const CATEGORIES = {
+  construction: { label: "Construction", icon: "🏗️" },
+  warehouse: { label: "Warehouse/Logistics", icon: "📦" },
+  transportation: { label: "Transportation", icon: "🚛" },
+  food_service: { label: "Food Service", icon: "🍽️" },
+  hospitality: { label: "Hospitality", icon: "🏨" },
+  custodial: { label: "Custodial", icon: "🧹" },
+  manufacturing: { label: "Manufacturing", icon: "🏭" },
+  retail: { label: "Retail", icon: "🛒" },
+  other: { label: "Other", icon: "💼" }
 };
 
-export default function Home() {
+// Frequent Hirer detection patterns
+const FREQUENT_HIRERS = {
+  walmart: {
+    patterns: ["walmart", "sam's club", "sams club"],
+    name: "Walmart / Sam's Club",
+    icon: "🛒"
+  },
+  amazon: {
+    patterns: ["amazon", "aws", "whole foods"],
+    name: "Amazon",
+    icon: "📦"
+  },
+  target: {
+    patterns: ["target"],
+    name: "Target",
+    icon: "🎯"
+  },
+  fedex: {
+    patterns: ["fedex", "fed ex", "federal express"],
+    name: "FedEx",
+    icon: "📬"
+  },
+  ups: {
+    patterns: ["ups", "united parcel"],
+    name: "UPS",
+    icon: "📦"
+  },
+  foster_farms: {
+    patterns: ["foster farms", "fosterfarms"],
+    name: "Foster Farms",
+    icon: "🐔"
+  },
+  pridestaff: {
+    patterns: ["pridestaff", "pride staff"],
+    name: "PrideStaff",
+    icon: "🤝"
+  },
+  randstad: {
+    patterns: ["randstad"],
+    name: "Randstad",
+    icon: "🤝"
+  },
+  adecco: {
+    patterns: ["adecco"],
+    name: "Adecco",
+    icon: "🤝"
+  }
+};
+
+function detectFrequentHirer(company, url) {
+  const searchText = `${company} ${url}`.toLowerCase();
+  for (const [key, hirer] of Object.entries(FREQUENT_HIRERS)) {
+    if (hirer.patterns.some(pattern => searchText.includes(pattern))) {
+      return key;
+    }
+  }
+  return null;
+}
+
+function getDaysUntilExpiration(expirationDate) {
+  if (!expirationDate) return null;
+  const now = new Date();
+  const exp = new Date(expirationDate);
+  const diff = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+  return diff;
+}
+
+export default function CEOJobBoard() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState("jobs");
+  
+  // Jobs state
   const [jobs, setJobs] = useState([]);
-  const [url, setUrl] = useState('');
-  const [bulkUrls, setBulkUrls] = useState('');
-  const [bulkMode, setBulkMode] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
-  const [manualDescription, setManualDescription] = useState('');
+  const [newUrl, setNewUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0 });
-  const [error, setError] = useState('');
-  const [errorLog, setErrorLog] = useState([]);
-  const [showErrorLog, setShowErrorLog] = useState(false);
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [filterGrades, setFilterGrades] = useState([]);
   const [filterCategories, setFilterCategories] = useState([]);
   const [filterNoDiploma, setFilterNoDiploma] = useState(false);
@@ -50,48 +116,29 @@ export default function Home() {
   const [filterExpiringSoon, setFilterExpiringSoon] = useState(false);
   const [gradeDropdownOpen, setGradeDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [sortBy, setSortBy] = useState('date');
-  const [expandedJob, setExpandedJob] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [sortBy, setSortBy] = useState("date");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkUrls, setBulkUrls] = useState("");
+  const [bulkProgress, setBulkProgress] = useState(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualDescription, setManualDescription] = useState("");
+  const [editingJob, setEditingJob] = useState(null);
+  
+  // Frequent Hirers state
+  const [frequentHirers, setFrequentHirers] = useState([]);
+  const [selectedHirer, setSelectedHirer] = useState(null);
+  const [hirersLoading, setHirersLoading] = useState(true);
 
-  useEffect(() => {
-    loadJobs();
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('jobs-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
-        loadJobs();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.grade-dropdown') && !e.target.closest('.category-dropdown')) {
-        setGradeDropdownOpen(false);
-        setCategoryDropdownOpen(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
-  const loadJobs = async () => {
+  // Fetch jobs
+  const fetchJobs = useCallback(async () => {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - JOB_EXPIRY_DAYS);
-      
       const { data, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .gte('submitted_at', cutoffDate.toISOString())
-        .order('submitted_at', { ascending: false });
-
+        .from("jobs")
+        .select("*")
+        .order("date_posted", { ascending: false });
       if (error) throw error;
-      
-      const formattedJobs = data.map(job => ({
+      const transformedJobs = (data || []).map(job => ({
         id: job.id,
         url: job.url,
         directUrl: job.direct_url,
@@ -109,206 +156,193 @@ export default function Home() {
         expirationDate: job.expiration_date,
         submittedAt: job.submitted_at,
         submittedBy: job.submitted_by,
-        needsReview: job.needs_review
+        needsReview: job.needs_review,
+        frequentHirer: detectFrequentHirer(job.company, job.url)
       }));
-      
-      setJobs(formattedJobs);
-    } catch (e) {
-      console.error('Error loading jobs:', e);
+      setJobs(transformedJobs);
+    } catch (err) {
+      console.error("Error fetching jobs:", err);
+    } finally {
+      setInitialLoad(false);
     }
-    setInitialLoad(false);
+  }, []);
+
+  // Fetch frequent hirers
+  const fetchFrequentHirers = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("frequent_hirers")
+        .select("*")
+        .order("display_order", { ascending: true });
+      if (error) throw error;
+      setFrequentHirers(data || []);
+    } catch (err) {
+      console.error("Error fetching frequent hirers:", err);
+    } finally {
+      setHirersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchJobs();
+    fetchFrequentHirers();
+    const jobsChannel = supabase
+      .channel("jobs-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "jobs" }, fetchJobs)
+      .subscribe();
+    const hirersChannel = supabase
+      .channel("hirers-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "frequent_hirers" }, fetchFrequentHirers)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(jobsChannel);
+      supabase.removeChannel(hirersChannel);
+    };
+  }, [fetchJobs, fetchFrequentHirers]);
+
+  // Auto-clear messages
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
+
+  const analyzeJob = async (url) => {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.troubleshoot || data.error);
+    return data.job;
+  };
+
+  const analyzeManualJob = async (url, description) => {
+    const response = await fetch("/api/analyze-manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, description })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.troubleshoot || data.error);
+    return data.job;
   };
 
   const saveJob = async (job) => {
-    try {
-      const { error } = await supabase.from('jobs').insert({
-        id: job.id,
-        url: job.url,
-        direct_url: job.directUrl,
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        grade: job.grade,
-        grade_reason: job.gradeReason,
-        category: job.category,
-        ceo_match: job.ceoMatch,
-        salary: job.salary,
-        requires_diploma: job.requiresDiploma,
-        requires_license: job.requiresLicense,
-        date_posted: job.datePosted,
-        expiration_date: job.expirationDate,
-        submitted_at: job.submittedAt,
-        submitted_by: job.submittedBy,
-        needs_review: job.needsReview
-      });
-      if (error) throw error;
-      return true;
-    } catch (e) {
-      console.error('Error saving job:', e);
-      return false;
-    }
-  };
-
-  const analyzeJobUrl = async (jobUrl, existingUrls) => {
-    try { new URL(jobUrl); } catch {
-      return { error: 'Invalid URL format', url: jobUrl, troubleshoot: 'Make sure the URL includes https://' };
-    }
-    if (existingUrls.some(u => u === jobUrl)) {
-      return { error: 'Duplicate URL', url: jobUrl, troubleshoot: 'This job has already been added' };
-    }
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: jobUrl })
-      });
-      if (!response.ok) {
-        return { error: 'API request failed', url: jobUrl, troubleshoot: `Server returned ${response.status}. Try again.` };
-      }
-      const data = await response.json();
-      if (data.error) {
-        return { error: data.error, url: jobUrl, troubleshoot: data.troubleshoot || 'Unknown error', canAddAnyway: data.canAddAnyway };
-      }
-      return { success: true, job: data.job };
-    } catch (e) {
-      return { error: 'Network error', url: jobUrl, troubleshoot: 'Check your internet connection' };
-    }
-  };
-
-  const analyzeManualEntry = async () => {
-    if (!url.trim()) { setError('Please enter the job URL'); return; }
-    if (!manualDescription.trim()) { setError('Please paste the job description'); return; }
-    
-    setAnalyzing(true); setError(''); setSuccess('');
-    
-    try {
-      const response = await fetch('/api/analyze-manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url, description: manualDescription })
-      });
-      
-      if (!response.ok) {
-        setError('Analysis failed. Please try again.');
-        setAnalyzing(false);
-        return;
-      }
-      
-      const data = await response.json();
-      if (data.error) {
-        setError(data.error);
-        setAnalyzing(false);
-        return;
-      }
-      
-      const saved = await saveJob(data.job);
-      if (saved) {
-        setUrl('');
-        setManualDescription('');
-        setSuccess(`Successfully added: ${data.job.title} at ${data.job.company}`);
-        loadJobs();
-      }
-    } catch (e) {
-      setError('Failed to analyze. Please try again.');
-    }
-    setAnalyzing(false);
-  };
-
-  const analyzeJob = async () => {
-    if (bulkMode) {
-      const urls = bulkUrls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
-      if (urls.length === 0) { setError('Please enter at least one URL'); return; }
-      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog([]);
-      setAnalyzeProgress({ current: 0, total: urls.length });
-      const existingUrls = jobs.flatMap(j => [j.url, j.directUrl]);
-      const newJobs = []; const errors = [];
-      for (let i = 0; i < urls.length; i++) {
-        setAnalyzeProgress({ current: i + 1, total: urls.length });
-        
-        // Add delay between requests to avoid rate limiting
-        if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
-        }
-        
-        const result = await analyzeJobUrl(urls[i], [...existingUrls, ...newJobs.map(j => j.url)]);
-        if (result.success) {
-          const saved = await saveJob(result.job);
-          if (saved) newJobs.push(result.job);
-        } else {
-          errors.push({ url: result.url, error: result.error, troubleshoot: result.troubleshoot, canAddAnyway: result.canAddAnyway });
-        }
-      }
-      setBulkUrls(''); setAnalyzing(false);
-      if (errors.length > 0) { setErrorLog(errors); setShowErrorLog(true); }
-      if (newJobs.length > 0 && errors.length === 0) {
-        setSuccess(`Successfully added ${newJobs.length} job${newJobs.length > 1 ? 's' : ''}`);
-      } else if (newJobs.length > 0) {
-        setSuccess(`Added ${newJobs.length} job${newJobs.length > 1 ? 's' : ''}. ${errors.length} failed.`);
-      } else if (errors.length > 0) {
-        setError(`All ${errors.length} URLs failed - see error log.`);
-      }
-      loadJobs();
-    } else {
-      if (!url.trim()) { setError('Please enter a job URL'); return; }
-      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog([]);
-      const existingUrls = jobs.flatMap(j => [j.url, j.directUrl]);
-      const result = await analyzeJobUrl(url, existingUrls);
-      if (result.success) {
-        const saved = await saveJob(result.job);
-        if (saved) {
-          setUrl('');
-          setSuccess(`Successfully added: ${result.job.title} at ${result.job.company}`);
-          loadJobs();
-        }
-      } else {
-        setErrorLog([{ url: result.url, error: result.error, troubleshoot: result.troubleshoot, canAddAnyway: result.canAddAnyway }]);
-        setShowErrorLog(true);
-        setError(`Failed: ${result.error}`);
-      }
-      setAnalyzing(false);
-    }
-  };
-
-  const removeJob = async (jobId) => {
-    await supabase.from('jobs').delete().eq('id', jobId);
-    loadJobs();
-  };
-
-  const addJobManually = async (errorItem) => {
-    const newJob = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      url: errorItem.url, directUrl: errorItem.url,
-      title: 'Unknown Position - Needs Review', company: 'Unknown Company',
-      location: 'Location not specified', grade: 'good',
-      gradeReason: 'Unable to analyze - added manually', category: 'other',
-      ceoMatch: 'Manual review needed', salary: 'Not listed',
-      requiresDiploma: false, requiresLicense: false,
-      datePosted: new Date().toISOString().split('T')[0], expirationDate: null,
-      submittedAt: new Date().toISOString(), submittedBy: 'CEO Fresno Staff', needsReview: true
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + 21);
+    const dbJob = {
+      id: job.id,
+      url: job.url,
+      direct_url: job.directUrl,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      grade: job.grade,
+      grade_reason: job.gradeReason,
+      category: job.category,
+      ceo_match: job.ceoMatch,
+      salary: job.salary,
+      requires_diploma: job.requiresDiploma,
+      requires_license: job.requiresLicense,
+      date_posted: job.datePosted,
+      expiration_date: expirationDate.toISOString().split("T")[0],
+      submitted_at: job.submittedAt,
+      submitted_by: job.submittedBy,
+      needs_review: job.needsReview
     };
-    await saveJob(newJob);
-    setErrorLog(errorLog.filter(e => e.url !== errorItem.url));
-    if (errorLog.length <= 1) setShowErrorLog(false);
-    setSuccess(`Added for manual review`);
-    loadJobs();
+    const { error } = await supabase.from("jobs").upsert(dbJob, { onConflict: "id" });
+    if (error) throw error;
   };
 
-  const markAsReviewed = async (jobId) => {
-    await supabase.from('jobs').update({ needs_review: false }).eq('id', jobId);
-    loadJobs();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!newUrl.trim()) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const job = await analyzeJob(newUrl.trim());
+      await saveJob(job);
+      setSuccess(`Added: ${job.title} at ${job.company}`);
+      setNewUrl("");
+      fetchJobs();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const copyShareLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    if (!manualUrl.trim() || !manualDescription.trim()) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const job = await analyzeManualJob(manualUrl.trim(), manualDescription.trim());
+      await saveJob(job);
+      setSuccess(`Added: ${job.title} at ${job.company}`);
+      setManualUrl("");
+      setManualDescription("");
+      setManualMode(false);
+      fetchJobs();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getDaysRemaining = (submittedAt) => {
-    const submitted = new Date(submittedAt);
-    const now = new Date();
-    const daysPassed = Math.floor((now - submitted) / (1000 * 60 * 60 * 24));
-    return JOB_EXPIRY_DAYS - daysPassed;
+  const handleBulkSubmit = async () => {
+    const urls = bulkUrls.split("\n").map(u => u.trim()).filter(u => u);
+    if (urls.length === 0) return;
+    setBulkProgress({ current: 0, total: urls.length, results: [] });
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        const job = await analyzeJob(urls[i]);
+        await saveJob(job);
+        setBulkProgress(prev => ({
+          ...prev,
+          current: i + 1,
+          results: [...prev.results, { url: urls[i], success: true, title: job.title }]
+        }));
+      } catch (err) {
+        setBulkProgress(prev => ({
+          ...prev,
+          current: i + 1,
+          results: [...prev.results, { url: urls[i], success: false, error: err.message }]
+        }));
+      }
+      if (i < urls.length - 1) await new Promise(r => setTimeout(r, 2000));
+    }
+    fetchJobs();
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await supabase.from("jobs").delete().eq("id", id);
+      fetchJobs();
+    } catch (err) {
+      setError("Failed to delete job");
+    }
+  };
+
+  const handleUpdateJob = async (job) => {
+    try {
+      await saveJob(job);
+      setEditingJob(null);
+      fetchJobs();
+      setSuccess("Job updated successfully");
+    } catch (err) {
+      setError("Failed to update job");
+    }
   };
 
   const filteredJobs = jobs
@@ -316,289 +350,578 @@ export default function Home() {
     .filter(job => filterCategories.length === 0 || filterCategories.includes(job.category))
     .filter(job => !filterNoDiploma || !job.requiresDiploma)
     .filter(job => !filterNoLicense || !job.requiresLicense)
-    .filter(job => !filterExpiringSoon || getDaysRemaining(job.submittedAt) <= 7)
+    .filter(job => !filterExpiringSoon || (getDaysUntilExpiration(job.expirationDate) !== null && getDaysUntilExpiration(job.expirationDate) <= 7))
     .sort((a, b) => {
-      if (sortBy === 'date') return new Date(b.submittedAt) - new Date(a.submittedAt);
-      if (sortBy === 'grade') {
-        const order = ['best', 'better', 'good', 'fair', 'poor'];
-        return order.indexOf(a.grade) - order.indexOf(b.grade);
+      if (sortBy === "grade") {
+        const order = { best: 0, good: 1, fair: 2, poor: 3 };
+        return order[a.grade] - order[b.grade];
       }
-      if (sortBy === 'expiring') return getDaysRemaining(a.submittedAt) - getDaysRemaining(b.submittedAt);
-      return 0;
+      if (sortBy === "expiring") {
+        const daysA = getDaysUntilExpiration(a.expirationDate) ?? 999;
+        const daysB = getDaysUntilExpiration(b.expirationDate) ?? 999;
+        return daysA - daysB;
+      }
+      return new Date(b.datePosted) - new Date(a.datePosted);
     });
 
-  const GradeBadge = ({ grade }) => {
-    const info = GRADE_INFO[grade] || GRADE_INFO.good;
+  // Render Frequent Hirers Guide
+  const renderFrequentHirersGuide = () => {
+    if (selectedHirer) {
+      const hirer = frequentHirers.find(h => h.slug === selectedHirer);
+      if (!hirer) return null;
+      
+      return (
+        <div className="space-y-6">
+          <button
+            onClick={() => setSelectedHirer(null)}
+            className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to all guides
+          </button>
+          
+          <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="text-4xl">{hirer.icon}</div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">{hirer.name}</h2>
+                <p className="text-slate-400 mt-1">{hirer.tagline}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {hirer.apply_url && (
+                <a
+                  href={hirer.apply_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg transition-colors"
+                >
+                  <Globe className="w-5 h-5" />
+                  Apply Now
+                  <ExternalLink className="w-4 h-4 ml-auto" />
+                </a>
+              )}
+              {hirer.phone && (
+                <a
+                  href={`tel:${hirer.phone}`}
+                  className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg transition-colors"
+                >
+                  <Phone className="w-5 h-5" />
+                  {hirer.phone}
+                </a>
+              )}
+              {hirer.address && (
+                <div className="flex items-center gap-2 bg-slate-700 text-white px-4 py-3 rounded-lg">
+                  <MapPin className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-sm">{hirer.address}</span>
+                </div>
+              )}
+            </div>
+
+            {hirer.quick_facts && (
+              <div className="bg-slate-900 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-400" />
+                  Quick Facts
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  {hirer.quick_facts.map((fact, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <span className="text-slate-300">{fact}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div 
+              className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-blue-400"
+              dangerouslySetInnerHTML={{ __html: hirer.guide_html }}
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-white ${info.color}`}>
-        {'★'.repeat(info.stars)}<span className="ml-1">{info.label}</span>
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl p-6 border border-blue-800">
+          <h2 className="text-xl font-bold text-white mb-2">📋 Application Survival Guides</h2>
+          <p className="text-slate-300">
+            Step-by-step guides for high-volume employers. Each guide covers exactly how to apply, 
+            what assessments to expect, common tech pitfalls, and tips for success.
+          </p>
+        </div>
+
+        {hirersLoading ? (
+          <div className="text-center py-12 text-slate-400">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />
+            Loading guides...
+          </div>
+        ) : frequentHirers.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No guides available yet.</p>
+            <p className="text-sm mt-2">Run the database seed script to add employer guides.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {frequentHirers.map(hirer => (
+              <button
+                key={hirer.slug}
+                onClick={() => setSelectedHirer(hirer.slug)}
+                className="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 rounded-xl p-5 text-left transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">{hirer.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
+                      {hirer.name}
+                    </h3>
+                    <p className="text-sm text-slate-400 mt-1 line-clamp-2">{hirer.tagline}</p>
+                    {hirer.category && (
+                      <span className="inline-block mt-2 text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
+                        {hirer.category}
+                      </span>
+                    )}
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
 
-  const CategoryBadge = ({ category }) => {
-    const cat = EXPERIENCE_CATEGORIES[category] || EXPERIENCE_CATEGORIES.other;
-    return <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${cat.color}`}>{cat.icon} {cat.label}</span>;
-  };
-
-  const ExpiryBadge = ({ submittedAt }) => {
-    const daysRemaining = getDaysRemaining(submittedAt);
-    let colorClass = 'bg-slate-500/20 text-slate-400 border-slate-500/30';
-    let label = `${daysRemaining}d left`;
-    if (daysRemaining <= 3) { colorClass = 'bg-red-500/20 text-red-400 border-red-500/30'; label = daysRemaining <= 0 ? 'Expiring today' : `${daysRemaining}d left`; }
-    else if (daysRemaining <= 7) { colorClass = 'bg-amber-500/20 text-amber-400 border-amber-500/30'; }
-    return <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${colorClass}`}><Clock className="w-3 h-3" />{label}</span>;
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-full mb-3">
-            <Award className="w-5 h-5 text-emerald-400" />
-            <span className="text-emerald-400 font-medium text-sm">Fair Chance Employment</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">CEO Fresno Job Board</h1>
-          <p className="text-slate-400 text-sm">Curated opportunities for returning citizens • Updated live</p>
-          <button onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
-            {copied ? 'Link copied!' : 'Share this board'}
+    <div className="min-h-screen bg-slate-900 text-white">
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            CEO Fresno Fair Chance Job Board
+          </h1>
+          <p className="text-slate-400 mt-2">AI-powered job analysis for reentry employment</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 bg-slate-800 p-1 rounded-lg w-fit">
+          <button
+            onClick={() => setActiveTab("jobs")}
+            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+              activeTab === "jobs"
+                ? "bg-blue-600 text-white"
+                : "text-slate-400 hover:text-white hover:bg-slate-700"
+            }`}
+          >
+            <Search className="w-4 h-4" />
+            Job Board
+            <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">
+              {jobs.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("guides")}
+            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+              activeTab === "guides"
+                ? "bg-blue-600 text-white"
+                : "text-slate-400 hover:text-white hover:bg-slate-700"
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            Frequent Hirers
+            <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded-full">
+              {frequentHirers.length}
+            </span>
           </button>
         </div>
 
-        <div className="bg-slate-800/50 backdrop-blur rounded-xl p-5 mb-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-white font-semibold flex items-center gap-2">
-              <Plus className="w-5 h-5 text-emerald-400" />Submit {bulkMode ? 'Multiple Jobs' : manualMode ? 'Job (Manual)' : 'a Job'}
-            </h2>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => { setManualMode(!manualMode); setBulkMode(false); }} 
-                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${manualMode ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}
-              >
-                {manualMode ? '← Auto Mode' : 'Manual Entry'}
-              </button>
-              {!manualMode && (
-                <button onClick={() => setBulkMode(!bulkMode)} className={`text-xs px-3 py-1.5 rounded-full transition-colors ${bulkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-                  {bulkMode ? '← Single URL' : 'Bulk Upload →'}
-                </button>
-              )}
+        {/* Messages */}
+        {error && (
+          <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-200 font-medium">Error</p>
+              <p className="text-red-300 text-sm">{error}</p>
             </div>
           </div>
-          
-          {manualMode ? (
-            <div className="space-y-3">
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
-                <p className="text-amber-400 font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Manual Entry Mode</p>
-                <p className="text-slate-400 text-xs mt-1">Use this when a job page can't be parsed (like ADP Workforce Now). Paste the job URL and copy/paste the job description from the page.</p>
+        )}
+        {success && (
+          <div className="bg-emerald-900/50 border border-emerald-500 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <p className="text-emerald-200">{success}</p>
+          </div>
+        )}
+
+        {activeTab === "guides" ? (
+          renderFrequentHirersGuide()
+        ) : (
+          <>
+            {/* Add Job Section */}
+            <div className="bg-slate-800 rounded-xl p-6 mb-6 border border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Plus className="w-5 h-5" /> Add Job
+                </h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setManualMode(false); setBulkMode(!bulkMode); }}
+                    className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${bulkMode ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+                  >
+                    <Upload className="w-4 h-4" /> Bulk Upload
+                  </button>
+                  <button
+                    onClick={() => { setBulkMode(false); setManualMode(!manualMode); }}
+                    className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ${manualMode ? "bg-purple-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+                  >
+                    <Edit3 className="w-4 h-4" /> Manual Entry
+                  </button>
+                </div>
               </div>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="Paste job posting URL here..."
-                className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-              />
-              <textarea
-                value={manualDescription}
-                onChange={(e) => setManualDescription(e.target.value)}
-                placeholder="Paste the full job description here (copy from the job page)..."
-                rows={6}
-                className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none text-sm"
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 text-xs">{manualDescription.length} characters</span>
+
+              {bulkMode ? (
+                <div className="space-y-4">
+                  <textarea
+                    value={bulkUrls}
+                    onChange={(e) => setBulkUrls(e.target.value)}
+                    placeholder="Paste job URLs (one per line)..."
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 h-32 resize-none"
+                  />
+                  <button
+                    onClick={handleBulkSubmit}
+                    disabled={bulkProgress !== null}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors"
+                  >
+                    {bulkProgress ? `Processing ${bulkProgress.current}/${bulkProgress.total}...` : "Analyze All"}
+                  </button>
+                  {bulkProgress && bulkProgress.current === bulkProgress.total && (
+                    <div className="mt-4 space-y-2">
+                      {bulkProgress.results.map((r, i) => (
+                        <div key={i} className={`text-sm p-2 rounded ${r.success ? "bg-emerald-900/30 text-emerald-300" : "bg-red-900/30 text-red-300"}`}>
+                          {r.success ? `✓ ${r.title}` : `✗ ${r.error}`}
+                        </div>
+                      ))}
+                      <button onClick={() => { setBulkProgress(null); setBulkUrls(""); }} className="text-sm text-slate-400 hover:text-white">
+                        Clear results
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : manualMode ? (
+                <form onSubmit={handleManualSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Job URL</label>
+                    <input
+                      type="url"
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Job Description (copy & paste from the job page)</label>
+                    <textarea
+                      value={manualDescription}
+                      onChange={(e) => setManualDescription(e.target.value)}
+                      placeholder="Paste the full job description here..."
+                      className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 h-40 resize-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !manualUrl.trim() || !manualDescription.trim()}
+                    className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...</> : "Analyze Manual Entry"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleSubmit} className="flex gap-3">
+                  <input
+                    type="url"
+                    value={newUrl}
+                    onChange={(e) => setNewUrl(e.target.value)}
+                    placeholder="Paste job posting URL..."
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !newUrl.trim()}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {loading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analyzing...</> : <><Search className="w-4 h-4" /> Analyze</>}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 mb-6 items-center">
+              {/* Grade Filter */}
+              <div className="relative">
                 <button
-                  onClick={analyzeManualEntry}
-                  disabled={analyzing}
-                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  onClick={() => { setGradeDropdownOpen(!gradeDropdownOpen); setCategoryDropdownOpen(false); }}
+                  className="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:border-slate-500 transition-colors"
                 >
-                  {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
+                  <Filter className="w-4 h-4" />
+                  Grade {filterGrades.length > 0 && `(${filterGrades.length})`}
+                  <ChevronDown className="w-4 h-4" />
                 </button>
-              </div>
-            </div>
-          ) : bulkMode ? (
-            <div className="space-y-3">
-              <textarea value={bulkUrls} onChange={(e) => setBulkUrls(e.target.value)} placeholder="Paste multiple job URLs (one per line or comma-separated)..." rows={4} className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none font-mono text-sm" />
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 text-xs">{bulkUrls.split(/[\n,]+/).filter(u => u.trim()).length} URLs detected</span>
-                <button onClick={analyzeJob} disabled={analyzing} className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2">
-                  {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing {analyzeProgress.current}/{analyzeProgress.total}...</> : <><Search className="w-4 h-4" />Analyze All</>}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste job posting URL here..." className="flex-1 bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" onKeyPress={(e) => e.key === 'Enter' && analyzeJob()} />
-              <button onClick={analyzeJob} disabled={analyzing} className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2">
-                {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
-              </button>
-            </div>
-          )}
-          {error && <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg"><AlertCircle className="w-4 h-4" />{error}</div>}
-          {success && <div className="mt-3 flex items-center gap-2 text-emerald-400 text-sm bg-emerald-500/10 px-3 py-2 rounded-lg"><CheckCircle className="w-4 h-4" />{success}</div>}
-          {errorLog.length > 0 && (
-            <div className="mt-3 bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
-              <button onClick={() => setShowErrorLog(!showErrorLog)} className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/50">
-                <span className="text-red-400 text-sm font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Error Log ({errorLog.length})</span>
-                {showErrorLog ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-              </button>
-              {showErrorLog && (
-                <div className="border-t border-slate-700 max-h-64 overflow-y-auto">
-                  {errorLog.map((err, idx) => (
-                    <div key={idx} className="px-3 py-3 border-b border-slate-700/50 last:border-b-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-red-400 text-xs font-semibold bg-red-500/20 px-1.5 py-0.5 rounded">{err.error}</span>
-                        {err.canAddAnyway && <button onClick={() => addJobManually(err)} className="text-xs bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 px-2 py-1 rounded flex items-center gap-1"><Plus className="w-3 h-3" />Add Anyway</button>}
-                      </div>
-                      <a href={err.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 text-xs mt-1 block truncate hover:text-slate-300">{err.url}</a>
-                      <div className="mt-2 flex items-start gap-2 text-xs"><span className="text-amber-400 font-medium">💡 Fix:</span><span className="text-slate-400">{err.troubleshoot}</span></div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-slate-800/30 rounded-xl p-4 mb-6 border border-slate-700/50">
-          <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Fair Chance Rating Guide</h3>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(GRADE_INFO).map(([key, info]) => (
-              <div key={key} className="flex items-center gap-2 text-xs"><GradeBadge grade={key} /><span className="text-slate-500">{info.desc}</span></div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 mb-4">
-          <div className="relative grade-dropdown">
-            <button onClick={() => { setGradeDropdownOpen(!gradeDropdownOpen); setCategoryDropdownOpen(false); }} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 flex items-center gap-2 min-w-[140px]">
-              <span>{filterGrades.length === 0 ? 'All Grades' : `${filterGrades.length} Grade${filterGrades.length > 1 ? 's' : ''}`}</span>
-              <ChevronDown className="w-4 h-4 ml-auto" />
-            </button>
-            {gradeDropdownOpen && (
-              <div className="absolute z-20 mt-1 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
-                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterGrades([])} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
-                {Object.entries(GRADE_INFO).map(([key, info]) => (
-                  <label key={key} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 cursor-pointer">
-                    <input type="checkbox" checked={filterGrades.includes(key)} onChange={(e) => e.target.checked ? setFilterGrades([...filterGrades, key]) : setFilterGrades(filterGrades.filter(g => g !== key))} className="w-4 h-4 rounded" />
-                    <span className={`${info.color} text-white text-xs px-1.5 py-0.5 rounded`}>{'★'.repeat(info.stars)}</span>
-                    <span className="text-slate-300 text-sm">{info.desc}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="relative category-dropdown">
-            <button onClick={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setGradeDropdownOpen(false); }} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 flex items-center gap-2 min-w-[160px]">
-              <span>{filterCategories.length === 0 ? 'All Categories' : `${filterCategories.length} Categor${filterCategories.length > 1 ? 'ies' : 'y'}`}</span>
-              <ChevronDown className="w-4 h-4 ml-auto" />
-            </button>
-            {categoryDropdownOpen && (
-              <div className="absolute z-20 mt-1 w-56 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
-                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterCategories([])} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
-                {Object.entries(EXPERIENCE_CATEGORIES).map(([key, cat]) => (
-                  <label key={key} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 cursor-pointer">
-                    <input type="checkbox" checked={filterCategories.includes(key)} onChange={(e) => e.target.checked ? setFilterCategories([...filterCategories, key]) : setFilterCategories(filterCategories.filter(c => c !== key))} className="w-4 h-4 rounded" />
-                    <span className="text-slate-300 text-sm">{cat.icon} {cat.label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-4 px-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filterNoDiploma} onChange={(e) => setFilterNoDiploma(e.target.checked)} className="w-4 h-4 rounded" />
-              <span className="text-slate-300 text-sm flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5" />No Diploma</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filterNoLicense} onChange={(e) => setFilterNoLicense(e.target.checked)} className="w-4 h-4 rounded" />
-              <span className="text-slate-300 text-sm flex items-center gap-1"><Car className="w-3.5 h-3.5" />No License</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={filterExpiringSoon} onChange={(e) => setFilterExpiringSoon(e.target.checked)} className="w-4 h-4 rounded" />
-              <span className="text-slate-300 text-sm flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Expiring Soon</span>
-            </label>
-          </div>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2">
-            <option value="date">Sort by Date Added</option>
-            <option value="grade">Sort by Grade</option>
-            <option value="expiring">Sort by Expiring</option>
-          </select>
-          <div className="ml-auto text-slate-400 text-sm flex items-center gap-2"><Users className="w-4 h-4" />{filteredJobs.length} jobs</div>
-        </div>
-
-        <div className="space-y-3">
-          {initialLoad ? (
-            <div className="text-center py-12 text-slate-400"><RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />Loading...</div>
-          ) : filteredJobs.length === 0 ? (
-            <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/50">
-              <Briefcase className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">No jobs found</p>
-            </div>
-          ) : filteredJobs.map(job => (
-            <div key={job.id} className="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 overflow-hidden hover:border-slate-600 transition-colors">
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <GradeBadge grade={job.grade} />
-                      <CategoryBadge category={job.category} />
-                      {job.needsReview && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30"><AlertCircle className="w-3 h-3" />Needs Review</span>}
-                    </div>
-                    <h3 className="text-white font-semibold text-lg truncate">{job.title}</h3>
-                    <p className="text-slate-400 text-sm">{job.company} • {job.location}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Added {new Date(job.submittedAt).toLocaleDateString()}</span>
-                      <ExpiryBadge submittedAt={job.submittedAt} />
-                      {job.salary !== 'Not listed' && <span className="text-emerald-400">{job.salary}</span>}
-                    </div>
-                    <div className="flex items-center gap-3 mt-2">
-                      <label className="flex items-center gap-1.5 text-xs">
-                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresDiploma ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresDiploma && <Check className="w-3 h-3" />}</span>
-                        <span className={job.requiresDiploma ? 'text-amber-400' : 'text-slate-500'}><GraduationCap className="w-3 h-3 inline mr-1" />Diploma/GED</span>
+                {gradeDropdownOpen && (
+                  <div className="absolute top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg p-2 z-10 min-w-[150px]">
+                    {Object.entries(GRADES).map(([key, grade]) => (
+                      <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 rounded cursor-pointer">
+                        <input type="checkbox" checked={filterGrades.includes(key)} onChange={(e) => e.target.checked ? setFilterGrades([...filterGrades, key]) : setFilterGrades(filterGrades.filter(g => g !== key))} className="w-4 h-4 rounded" />
+                        <span className={`w-3 h-3 rounded-full ${grade.color}`}></span>
+                        <span className="text-slate-300 text-sm">{grade.label}</span>
                       </label>
-                      <label className="flex items-center gap-1.5 text-xs">
-                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresLicense ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresLicense && <Check className="w-3 h-3" />}</span>
-                        <span className={job.requiresLicense ? 'text-amber-400' : 'text-slate-500'}><Car className="w-3 h-3 inline mr-1" />License</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a href={job.directUrl} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1">Apply <ExternalLink className="w-3 h-3" /></a>
-                    <button onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)} className="p-2 text-slate-400 hover:text-white">
-                      {expandedJob === job.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-                {expandedJob === job.id && (
-                  <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
-                    {job.needsReview && (
-                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
-                        <p className="text-amber-400 font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Manual Review Required</p>
-                        <p className="text-slate-400 text-xs mt-1">Click "Apply" to verify details, then "Mark Reviewed" when done.</p>
-                      </div>
-                    )}
-                    <div><h4 className="text-emerald-400 text-xs uppercase tracking-wider mb-1">Fair Chance Rating Reason</h4><p className="text-slate-300 text-sm">{job.gradeReason}</p></div>
-                    <div><h4 className="text-emerald-400 text-xs uppercase tracking-wider mb-1">CEO Participant Match</h4><p className="text-slate-300 text-sm">{job.ceoMatch}</p></div>
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-slate-500 text-xs">Submitted {new Date(job.submittedAt).toLocaleDateString()}</span>
-                      <div className="flex items-center gap-3">
-                        {job.needsReview && <button onClick={() => markAsReviewed(job.id)} className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" />Mark Reviewed</button>}
-                        <button onClick={() => removeJob(job.id)} className="text-red-400 hover:text-red-300 text-xs flex items-center gap-1"><Trash2 className="w-3 h-3" />Remove</button>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
 
-        <div className="mt-8 text-center text-slate-500 text-xs">
-          <p>Center for Employment Opportunities • Fresno, CA</p>
-          <p className="mt-1">Jobs expire 3 weeks after being added • Shared list updates in real-time</p>
-        </div>
+              {/* Category Filter */}
+              <div className="relative">
+                <button
+                  onClick={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setGradeDropdownOpen(false); }}
+                  className="flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:border-slate-500 transition-colors"
+                >
+                  <Building2 className="w-4 h-4" />
+                  Category {filterCategories.length > 0 && `(${filterCategories.length})`}
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {categoryDropdownOpen && (
+                  <div className="absolute top-full mt-1 bg-slate-800 border border-slate-600 rounded-lg p-2 z-10 min-w-[200px]">
+                    {Object.entries(CATEGORIES).map(([key, cat]) => (
+                      <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 rounded cursor-pointer">
+                        <input type="checkbox" checked={filterCategories.includes(key)} onChange={(e) => e.target.checked ? setFilterCategories([...filterCategories, key]) : setFilterCategories(filterCategories.filter(c => c !== key))} className="w-4 h-4 rounded" />
+                        <span className="text-slate-300 text-sm">{cat.icon} {cat.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Requirement Filters */}
+              <div className="flex items-center gap-4 px-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={filterNoDiploma} onChange={(e) => setFilterNoDiploma(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-slate-300 text-sm flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5" />No Diploma</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={filterNoLicense} onChange={(e) => setFilterNoLicense(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-slate-300 text-sm flex items-center gap-1"><Car className="w-3.5 h-3.5" />No License</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={filterExpiringSoon} onChange={(e) => setFilterExpiringSoon(e.target.checked)} className="w-4 h-4 rounded" />
+                  <span className="text-slate-300 text-sm flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Expiring Soon</span>
+                </label>
+              </div>
+
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2">
+                <option value="date">Sort by Date</option>
+                <option value="grade">Sort by Grade</option>
+                <option value="expiring">Sort by Expiring</option>
+              </select>
+
+              <div className="ml-auto text-slate-400 text-sm flex items-center gap-2">
+                <Users className="w-4 h-4" />{filteredJobs.length} jobs
+              </div>
+            </div>
+
+            {/* Job List */}
+            <div className="space-y-3">
+              {initialLoad ? (
+                <div className="text-center py-12 text-slate-400">
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />Loading...
+                </div>
+              ) : filteredJobs.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No jobs found matching your filters.</p>
+                </div>
+              ) : (
+                filteredJobs.map(job => {
+                  const days = getDaysUntilExpiration(job.expirationDate);
+                  const grade = GRADES[job.grade] || GRADES.good;
+                  const category = CATEGORIES[job.category] || CATEGORIES.other;
+                  const frequentHirerInfo = job.frequentHirer ? FREQUENT_HIRERS[job.frequentHirer] : null;
+                  const hasGuide = frequentHirerInfo && frequentHirers.some(h => h.slug === job.frequentHirer);
+
+                  return (
+                    <div key={job.id} className={`bg-slate-800 rounded-xl p-5 border ${days !== null && days <= 3 ? "border-red-500/50" : "border-slate-700"} hover:border-slate-600 transition-colors`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`w-2 h-full min-h-[60px] rounded-full ${grade.color}`}></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <h3 className="text-lg font-semibold text-white truncate">{job.title}</h3>
+                              <p className="text-slate-400 flex items-center gap-2 flex-wrap">
+                                {job.company}
+                                {job.location && <span className="text-slate-500">• {job.location}</span>}
+                                {hasGuide && (
+                                  <button
+                                    onClick={() => { setSelectedHirer(job.frequentHirer); setActiveTab("guides"); }}
+                                    className="inline-flex items-center gap-1 text-xs bg-blue-600/30 text-blue-300 px-2 py-0.5 rounded-full hover:bg-blue-600/50 transition-colors"
+                                  >
+                                    <BookOpen className="w-3 h-3" />
+                                    View Guide
+                                  </button>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${grade.bgLight} ${grade.textColor}`}>
+                                {grade.label}
+                              </span>
+                              <span className="text-slate-500 text-sm">{category.icon}</span>
+                            </div>
+                          </div>
+
+                          {job.gradeReason && (
+                            <p className="text-sm text-slate-500 mt-2 line-clamp-2">{job.gradeReason}</p>
+                          )}
+
+                          <div className="flex items-center gap-4 mt-3 flex-wrap">
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className={`flex items-center gap-1 px-2 py-1 rounded border ${job.requiresDiploma ? "bg-amber-500/20 border-amber-500 text-amber-400" : "border-slate-600 text-slate-500"}`}>
+                                <GraduationCap className="w-3 h-3" />
+                                {job.requiresDiploma ? "Diploma Required" : "No Diploma"}
+                              </span>
+                              <span className={`flex items-center gap-1 px-2 py-1 rounded border ${job.requiresLicense ? "bg-amber-500/20 border-amber-500 text-amber-400" : "border-slate-600 text-slate-500"}`}>
+                                <Car className="w-3 h-3" />
+                                {job.requiresLicense ? "License Required" : "No License"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-4 text-xs text-slate-500 ml-auto">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                Posted {new Date(job.datePosted).toLocaleDateString()}
+                              </span>
+                              {days !== null && (
+                                <span className={`flex items-center gap-1 ${days <= 3 ? "text-red-400" : days <= 7 ? "text-amber-400" : "text-slate-500"}`}>
+                                  <Clock className="w-3 h-3" />
+                                  {days <= 0 ? "Expired" : `${days}d left`}
+                                </span>
+                              )}
+                              {job.salary && job.salary !== "Not listed" && (
+                                <span className="text-emerald-400">{job.salary}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-3">
+                            <a
+                              href={job.directUrl || job.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-4 h-4" /> View Job
+                            </a>
+                            <button
+                              onClick={() => setEditingJob(job)}
+                              className="text-slate-400 hover:text-white text-sm flex items-center gap-1 ml-4"
+                            >
+                              <Edit3 className="w-4 h-4" /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(job.id)}
+                              className="text-slate-400 hover:text-red-400 text-sm flex items-center gap-1 ml-2"
+                            >
+                              <Trash2 className="w-4 h-4" /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Edit Modal */}
+        {editingJob && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-bold mb-4">Edit Job</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={editingJob.title}
+                    onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Company</label>
+                  <input
+                    type="text"
+                    value={editingJob.company}
+                    onChange={(e) => setEditingJob({ ...editingJob, company: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Grade</label>
+                  <select
+                    value={editingJob.grade}
+                    onChange={(e) => setEditingJob({ ...editingJob, grade: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white"
+                  >
+                    {Object.entries(GRADES).map(([key, grade]) => (
+                      <option key={key} value={key}>{grade.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingJob.requiresDiploma}
+                      onChange={(e) => setEditingJob({ ...editingJob, requiresDiploma: e.target.checked })}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-slate-300">Requires Diploma</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingJob.requiresLicense}
+                      onChange={(e) => setEditingJob({ ...editingJob, requiresLicense: e.target.checked })}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-slate-300">Requires License</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => handleUpdateJob(editingJob)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setEditingJob(null)}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
