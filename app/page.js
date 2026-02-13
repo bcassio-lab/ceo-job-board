@@ -109,7 +109,8 @@ export default function Home() {
         expirationDate: job.expiration_date,
         submittedAt: job.submitted_at,
         submittedBy: job.submitted_by,
-        needsReview: job.needs_review
+        needsReview: job.needs_review,
+        applyTime: job.apply_time
       }));
       
       setJobs(formattedJobs);
@@ -139,7 +140,8 @@ export default function Home() {
         expiration_date: job.expirationDate,
         submitted_at: job.submittedAt,
         submitted_by: job.submittedBy,
-        needs_review: job.needsReview
+        needs_review: job.needsReview,
+        apply_time: job.applyTime
       });
       if (error) throw error;
       return true;
@@ -284,7 +286,8 @@ export default function Home() {
       ceoMatch: 'Manual review needed', salary: 'Not listed',
       requiresDiploma: false, requiresLicense: false,
       datePosted: new Date().toISOString().split('T')[0], expirationDate: null,
-      submittedAt: new Date().toISOString(), submittedBy: 'CEO Fresno Staff', needsReview: true
+      submittedAt: new Date().toISOString(), submittedBy: 'CEO Fresno Staff', needsReview: true,
+      applyTime: null
     };
     await saveJob(newJob);
     setErrorLog(errorLog.filter(e => e.url !== errorItem.url));
@@ -348,6 +351,18 @@ export default function Home() {
     if (daysRemaining <= 3) { colorClass = 'bg-red-500/20 text-red-400 border-red-500/30'; label = daysRemaining <= 0 ? 'Expiring today' : `${daysRemaining}d left`; }
     else if (daysRemaining <= 7) { colorClass = 'bg-amber-500/20 text-amber-400 border-amber-500/30'; }
     return <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${colorClass}`}><Clock className="w-3 h-3" />{label}</span>;
+  };
+
+  const ApplyTimeBadge = ({ applyTime }) => {
+    if (!applyTime) return null;
+    const text = applyTime.toLowerCase();
+    let colorClass = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+    if (text.includes('30') || text.includes('45') || text.includes('60')) {
+      colorClass = 'bg-red-500/20 text-red-400 border-red-500/30';
+    } else if (text.includes('15') || text.includes('20') || text.includes('25')) {
+      colorClass = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+    }
+    return <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${colorClass}`}>⏱ {applyTime}</span>;
   };
 
   return (
@@ -551,6 +566,7 @@ export default function Home() {
                     <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                       <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Added {new Date(job.submittedAt).toLocaleDateString()}</span>
                       <ExpiryBadge submittedAt={job.submittedAt} />
+                      {job.applyTime && <ApplyTimeBadge applyTime={job.applyTime} />}
                       {job.salary !== 'Not listed' && <span className="text-emerald-400">{job.salary}</span>}
                     </div>
                     <div className="flex items-center gap-3 mt-2">
