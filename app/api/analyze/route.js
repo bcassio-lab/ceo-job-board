@@ -64,7 +64,8 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these exact fie
   "requiresDiploma": true/false (if job requires high school diploma or GED),
   "requiresLicense": true/false (if job requires driver's license or any professional license),
   "datePosted": "YYYY-MM-DD format if found, otherwise today's date",
-  "expirationDate": "YYYY-MM-DD if listed, otherwise null"
+  "expirationDate": "YYYY-MM-DD if listed, otherwise null",
+  "applyTimeEstimate": "estimated time range to complete the application, e.g. '5-10 min', '15-20 min', '30-45 min'. Base this on: simple 1-page forms or walk-in = '5-10 min', standard online application with account creation (Workday, iCIMS, Taleo, ADP) = '15-25 min', lengthy multi-step applications with assessments or questionnaires = '30-45 min', government/state applications (CalCareers, USAJOBS) = '45-60 min'. If walk-in or email only, say '5 min (walk-in)' or '5 min (email)'"
 }`
         }]
       })
@@ -144,6 +145,7 @@ Respond ONLY with a JSON object (no markdown, no backticks) with these exact fie
       requiresLicense: analysis.requiresLicense || false,
       datePosted: analysis.datePosted || new Date().toISOString().split('T')[0],
       expirationDate: analysis.expirationDate || null,
+      applyTime: analysis.applyTimeEstimate || '10-15 min',
       submittedAt: new Date().toISOString(),
       submittedBy: 'CEO Fresno Staff',
       needsReview: false
