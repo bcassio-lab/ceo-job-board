@@ -375,10 +375,15 @@ export default function Home() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">CEO Fresno Job Board</h1>
           <p className="text-slate-400 text-sm">Curated opportunities for returning citizens • Updated live</p>
-          <button onClick={copyShareLink} className="mt-3 inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
-            {copied ? 'Link copied!' : 'Share this board'}
-          </button>
+<div className="mt-3 flex items-center justify-center gap-4">
+  <button onClick={copyShareLink} className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
+    {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+    {copied ? 'Link copied!' : 'Share this board'}
+  </button>
+  <a href="/guide" className="inline-flex items-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium px-4 py-1.5 rounded-full border border-emerald-500/30 transition-colors">
+    📋 Big-Box Application Guide
+  </a>
+</div>
         </div>
 
         <div className="bg-slate-800/50 backdrop-blur rounded-xl p-5 mb-6 border border-slate-700">
