@@ -1,3 +1,4 @@
+import ApplyModal from './components/ApplyModal';
 "use client";
 import ApplyModal from './components/ApplyModal';
 import React, { useState, useEffect } from 'react';
