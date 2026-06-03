@@ -1,55 +1,71 @@
 import { NextResponse } from "next/server";
+import { GoogleGenAI, Type } from "@google/genai";
+
+// The SDK automatically picks up the GEMINI_API_KEY environment variable
+const ai = new GoogleGenAI({});
 
 export async function POST(request) {
   try {
     const { url: jobUrl, description } = await request.json();
 
-    if (!jobUrl || !description) {
+    if (!jobUrl ||!description) {
       return NextResponse.json({ error: "URL and description are required" }, { status: 400 });
     }
 
-    const promptText = "Analyze this job posting for a fair-chance employment program serving people with criminal backgrounds.\n\nJob URL: " + jobUrl + "\n\nJob Description:\n" + description + "\n\nBased on the job description provided, respond ONLY with a JSON object (no markdown, no backticks) with these exact fields:\n{\n  \"jobTitle\": \"exact job title\",\n  \"company\": \"company name\",\n  \"location\": \"city, state\",\n  \"grade\": \"best or better or good or fair or poor\",\n  \"gradeReason\": \"explanation based on: best=fair chance encouraged, better=has EEO statement, good=no background check mentioned, fair=background check but only certain felonies disqualify, poor=strict background requirements\",\n  \"experienceCategory\": \"construction or warehouse or transportation or foodservice or hospitality or custodial or other\",\n  \"ceoMatch\": \"explanation of why this job matches CEO Fresno participant skills (mention relevant certifications like OSHA, forklift, CDL, food handler if applicable)\",\n  \"salary\": \"salary if listed\",\n  \"requiresDiploma\": true or false,\n  \"requiresLicense\": true or false,\n  \"applyTimeEstimate\": \"estimated time range to complete the application, e.g. '5-10 min', '15-20 min', '30-45 min'. Base this on: simple 1-page forms or walk-in = '5-10 min', standard online application with account creation (Workday, iCIMS, Taleo, ADP) = '15-25 min', lengthy multi-step applications with assessments or questionnaires = '30-45 min', government/state applications (CalCareers, USAJOBS) = '45-60 min'. If walk-in or email only, say '5 min (walk-in)' or '5 min (email)'\"\n}";
+    // Notice we no longer need to instruct it on how to format the JSON
+    const promptText = `Analyze this job posting for a fair-chance employment program serving people with criminal backgrounds.
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
+Job URL: ${jobUrl}
+
+Job Description:
+${description}`;
+
+    // Define the strict structure we want Gemini to return
+    const jobSchema = {
+      type: Type.OBJECT,
+      properties: {
+        jobTitle: { type: Type.STRING, description: "exact job title" },
+        company: { type: Type.STRING, description: "company name" },
+        location: { type: Type.STRING, description: "city, state" },
+        grade: { 
+          type: Type.STRING, 
+          enum: ["best", "better", "good", "fair", "poor"],
+          description: "best=fair chance encouraged, better=has EEO statement, good=no background check mentioned, fair=background check but only certain felonies disqualify, poor=strict background requirements" 
+        },
+        gradeReason: { type: Type.STRING, description: "explanation based on the background check grade" },
+        experienceCategory: { 
+          type: Type.STRING, 
+          enum: ["construction", "warehouse", "transportation", "foodservice", "hospitality", "custodial", "other"]
+        },
+        ceoMatch: { type: Type.STRING, description: "explanation of why this job matches CEO Fresno participant skills (mention relevant certifications like OSHA, forklift, CDL, food handler if applicable)" },
+        salary: { type: Type.STRING, nullable: true, description: "salary if listed, otherwise null" },
+        requiresDiploma: { type: Type.BOOLEAN },
+        requiresLicense: { type: Type.BOOLEAN },
+        applyTimeEstimate: { 
+          type: Type.STRING,
+          description: "estimated time range to complete the application, e.g. '5-10 min', '15-25 min', '30-45 min', '45-60 min'. If walk-in or email only, say '5 min (walk-in)' or '5 min (email)'"
+        }
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: promptText }]
-      })
+      required:
+    };
+
+    // Make the API call to Gemini
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash", // We use 2.5-flash as it is highly optimized for text extraction tasks
+      contents: promptText,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: jobSchema,
+        temperature: 0.1 // Keeping temperature low ensures more factual, deterministic extraction
+      }
     });
 
-    if (!response.ok) {
-      return NextResponse.json({
-        error: "API request failed",
-        troubleshoot: "Server returned " + response.status + ". Try again."
-      }, { status: response.status });
+    if (!response.text) {
+      throw new Error("No text returned from Gemini");
     }
 
-    const data = await response.json();
-
-    let analysisText = "";
-    for (const block of data.content) {
-      if (block.type === "text") {
-        analysisText += block.text;
-      }
-    }
-
-    let analysis;
-    try {
-      const cleanJson = analysisText.replace(/```json|```/g, "").trim();
-      analysis = JSON.parse(cleanJson);
-    } catch (parseErr) {
-      return NextResponse.json({
-        error: "Failed to parse response",
-        troubleshoot: "Please try again."
-      });
-    }
+    // Because we used responseSchema, this is guaranteed to parse correctly
+    const analysis = JSON.parse(response.text);
 
     const job = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -66,7 +82,7 @@ export async function POST(request) {
       requiresDiploma: analysis.requiresDiploma || false,
       requiresLicense: analysis.requiresLicense || false,
       applyTime: analysis.applyTimeEstimate || "10-15 min",
-      datePosted: new Date().toISOString().split("T")[0],
+      datePosted: new Date().toISOString().split("T"),
       expirationDate: null,
       submittedAt: new Date().toISOString(),
       submittedBy: "CEO Fresno Staff",
