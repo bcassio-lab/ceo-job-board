@@ -1,4 +1,3 @@
-import ApplyModal from './components/ApplyModal';
 "use client";
 import ApplyModal from './components/ApplyModal';
 import React, { useState, useEffect } from 'react';
@@ -32,27 +31,27 @@ const GRADE_INFO = {
 };
 
 export default function Home() {
- 35 |   const [jobs, setJobs] = useState();
- 36 |   const [url, setUrl] = useState('');
- 37 |   const = useState('');              // <-- Missing variable names
- 38 |   const = useState(false);           // <-- Missing variable names
- 39 |   const [manualMode, setManualMode] = useState(false);
- 40 |   const = useState('');              // <-- Missing variable names
+  const [jobs, setJobs] = useState([]);
+  const [url, setUrl] = useState('');
+  const [success, setSuccess] = useState('');
+  const [bulkMode, setBulkMode] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualDescription, setManualDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
-  const [errorLog, setErrorLog] = useState();
-  const = useState(false);
-  const = useState('');
-  const [filterGrades, setFilterGrades] = useState();
-  const [filterCategories, setFilterCategories] = useState();
-  const = useState(false);
+  const [errorLog, setErrorLog] = useState([]);
+  const [showErrorLog, setShowErrorLog] = useState(false);
+  const [bulkUrls, setBulkUrls] = useState('');
+  const [filterGrades, setFilterGrades] = useState([]);
+  const [filterCategories, setFilterCategories] = useState([]);
+  const [gradeDropdownOpen, setGradeDropdownOpen] = useState(false);
   const [filterNoLicense, setFilterNoLicense] = useState(false);
-  const = useState(false);
-  const = useState(false);
-  const = useState(false);
-  const = useState('date');
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [filterNoDiploma, setFilterNoDiploma] = useState(false);
+  const [filterExpiringSoon, setFilterExpiringSoon] = useState(false);
+  const [sortBy, setSortBy] = useState('date');
   const [expandedJob, setExpandedJob] = useState(null);
   const [copied, setCopied] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -61,24 +60,24 @@ export default function Home() {
     loadJobs();
     // Set up real-time subscription
     const channel = supabase
-     .channel('jobs-changes')
-     .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
+      .channel('jobs-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => {
         loadJobs();
       })
-     .subscribe();
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
-  },);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('.grade-dropdown') &&!e.target.closest('.category-dropdown')) {
+      if (!e.target.closest('.grade-dropdown') && !e.target.closest('.category-dropdown')) {
         setGradeDropdownOpen(false);
         setCategoryDropdownOpen(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  },);
+  }, []);
 
   const loadJobs = async () => {
     try {
@@ -86,10 +85,10 @@ export default function Home() {
       cutoffDate.setDate(cutoffDate.getDate() - JOB_EXPIRY_DAYS);
       
       const { data, error } = await supabase
-       .from('jobs')
-       .select('*')
-       .gte('submitted_at', cutoffDate.toISOString())
-       .order('submitted_at', { ascending: false });
+        .from('jobs')
+        .select('*')
+        .gte('submitted_at', cutoffDate.toISOString())
+        .order('submitted_at', { ascending: false });
 
       if (error) throw error;
       
@@ -222,10 +221,10 @@ export default function Home() {
     if (bulkMode) {
       const urls = bulkUrls.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
       if (urls.length === 0) { setError('Please enter at least one URL'); return; }
-      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog();
+      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog([]);
       setAnalyzeProgress({ current: 0, total: urls.length });
       const existingUrls = jobs.flatMap(j => [j.url, j.directUrl]);
-      const newJobs =; const errors =;
+      const newJobs = []; const errors = [];
       for (let i = 0; i < urls.length; i++) {
         setAnalyzeProgress({ current: i + 1, total: urls.length });
         
@@ -234,7 +233,7 @@ export default function Home() {
           await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
         }
         
-        const result = await analyzeJobUrl(urls[i], [...existingUrls,...newJobs.map(j => j.url)]);
+        const result = await analyzeJobUrl(urls[i], [...existingUrls, ...newJobs.map(j => j.url)]);
         if (result.success) {
           const saved = await saveJob(result.job);
           if (saved) newJobs.push(result.job);
@@ -245,16 +244,16 @@ export default function Home() {
       setBulkUrls(''); setAnalyzing(false);
       if (errors.length > 0) { setErrorLog(errors); setShowErrorLog(true); }
       if (newJobs.length > 0 && errors.length === 0) {
-        setSuccess(`Successfully added ${newJobs.length} job${newJobs.length > 1? 's' : ''}`);
+        setSuccess(`Successfully added ${newJobs.length} job${newJobs.length > 1 ? 's' : ''}`);
       } else if (newJobs.length > 0) {
-        setSuccess(`Added ${newJobs.length} job${newJobs.length > 1? 's' : ''}. ${errors.length} failed.`);
+        setSuccess(`Added ${newJobs.length} job${newJobs.length > 1 ? 's' : ''}. ${errors.length} failed.`);
       } else if (errors.length > 0) {
         setError(`All ${errors.length} URLs failed - see error log.`);
       }
       loadJobs();
     } else {
       if (!url.trim()) { setError('Please enter a job URL'); return; }
-      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog();
+      setAnalyzing(true); setError(''); setSuccess(''); setErrorLog([]);
       const existingUrls = jobs.flatMap(j => [j.url, j.directUrl]);
       const result = await analyzeJobUrl(url, existingUrls);
       if (result.success) {
@@ -287,12 +286,12 @@ export default function Home() {
       gradeReason: 'Unable to analyze - added manually', category: 'other',
       ceoMatch: 'Manual review needed', salary: 'Not listed',
       requiresDiploma: false, requiresLicense: false,
-      datePosted: new Date().toISOString().split('T'), expirationDate: null,
+      datePosted: new Date().toISOString().split('T')[0], expirationDate: null,
       submittedAt: new Date().toISOString(), submittedBy: 'CEO Fresno Staff', needsReview: true,
       applyTime: null
     };
     await saveJob(newJob);
-    setErrorLog(errorLog.filter(e => e.url!== errorItem.url));
+    setErrorLog(errorLog.filter(e => e.url !== errorItem.url));
     if (errorLog.length <= 1) setShowErrorLog(false);
     setSuccess(`Added for manual review`);
     loadJobs();
@@ -317,12 +316,12 @@ export default function Home() {
   };
 
   const filteredJobs = jobs
-   .filter(job => filterGrades.length === 0 || filterGrades.includes(job.grade))
-   .filter(job => filterCategories.length === 0 || filterCategories.includes(job.category))
-   .filter(job =>!filterNoDiploma ||!job.requiresDiploma)
-   .filter(job =>!filterNoLicense ||!job.requiresLicense)
-   .filter(job =>!filterExpiringSoon || getDaysRemaining(job.submittedAt) <= 7)
-   .sort((a, b) => {
+    .filter(job => filterGrades.length === 0 || filterGrades.includes(job.grade))
+    .filter(job => filterCategories.length === 0 || filterCategories.includes(job.category))
+    .filter(job => !filterNoDiploma || !job.requiresDiploma)
+    .filter(job => !filterNoLicense || !job.requiresLicense)
+    .filter(job => !filterExpiringSoon || getDaysRemaining(job.submittedAt) <= 7)
+    .sort((a, b) => {
       if (sortBy === 'date') return new Date(b.submittedAt) - new Date(a.submittedAt);
       if (sortBy === 'grade') {
         const order = ['best', 'better', 'good', 'fair', 'poor'];
@@ -350,7 +349,7 @@ export default function Home() {
     const daysRemaining = getDaysRemaining(submittedAt);
     let colorClass = 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     let label = `${daysRemaining}d left`;
-    if (daysRemaining <= 3) { colorClass = 'bg-red-500/20 text-red-400 border-red-500/30'; label = daysRemaining <= 0? 'Expiring today' : `${daysRemaining}d left`; }
+    if (daysRemaining <= 3) { colorClass = 'bg-red-500/20 text-red-400 border-red-500/30'; label = daysRemaining <= 0 ? 'Expiring today' : `${daysRemaining}d left`; }
     else if (daysRemaining <= 7) { colorClass = 'bg-amber-500/20 text-amber-400 border-amber-500/30'; }
     return <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${colorClass}`}><Clock className="w-3 h-3" />{label}</span>;
   };
@@ -377,38 +376,38 @@ export default function Home() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">CEO Fresno Job Board</h1>
           <p className="text-slate-400 text-sm">Curated opportunities for returning citizens • Updated live</p>
-<div className="mt-3 flex items-center justify-center gap-4">
-  <button onClick={copyShareLink} className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
-    {copied? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
-    {copied? 'Link copied!' : 'Share this board'}
-  </button>
-  <a href="/guide" className="inline-flex items-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium px-4 py-1.5 rounded-full border border-emerald-500/30 transition-colors">
-    📋 Big-Box Application Guide
-  </a>
-</div>
+          <div className="mt-3 flex items-center justify-center gap-4">
+            <button onClick={copyShareLink} className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
+              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+              {copied ? 'Link copied!' : 'Share this board'}
+            </button>
+            <a href="/guide" className="inline-flex items-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium px-4 py-1.5 rounded-full border border-emerald-500/30 transition-colors">
+              📋 Big-Box Application Guide
+            </a>
+          </div>
         </div>
 
         <div className="bg-slate-800/50 backdrop-blur rounded-xl p-5 mb-6 border border-slate-700">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-white font-semibold flex items-center gap-2">
-              <Plus className="w-5 h-5 text-emerald-400" />Submit {bulkMode? 'Multiple Jobs' : manualMode? 'Job (Manual)' : 'a Job'}
+              <Plus className="w-5 h-5 text-emerald-400" />Submit {bulkMode ? 'Multiple Jobs' : manualMode ? 'Job (Manual)' : 'a Job'}
             </h2>
             <div className="flex gap-2">
               <button 
                 onClick={() => { setManualMode(!manualMode); setBulkMode(false); }} 
-                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${manualMode? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}
+                className={`text-xs px-3 py-1.5 rounded-full transition-colors ${manualMode ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}
               >
-                {manualMode? '← Auto Mode' : 'Manual Entry'}
+                {manualMode ? '← Auto Mode' : 'Manual Entry'}
               </button>
               {!manualMode && (
-                <button onClick={() => setBulkMode(!bulkMode)} className={`text-xs px-3 py-1.5 rounded-full transition-colors ${bulkMode? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
-                  {bulkMode? '← Single URL' : 'Bulk Upload →'}
+                <button onClick={() => setBulkMode(!bulkMode)} className={`text-xs px-3 py-1.5 rounded-full transition-colors ${bulkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                  {bulkMode ? '← Single URL' : 'Bulk Upload →'}
                 </button>
               )}
             </div>
           </div>
           
-          {manualMode? (
+          {manualMode ? (
             <div className="space-y-3">
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm">
                 <p className="text-amber-400 font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Manual Entry Mode</p>
@@ -435,17 +434,17 @@ export default function Home() {
                   disabled={analyzing}
                   className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2"
                 >
-                  {analyzing? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
+                  {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
                 </button>
               </div>
             </div>
-          ) : bulkMode? (
+          ) : bulkMode ? (
             <div className="space-y-3">
               <textarea value={bulkUrls} onChange={(e) => setBulkUrls(e.target.value)} placeholder="Paste multiple job URLs (one per line or comma-separated)..." rows={4} className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none font-mono text-sm" />
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 text-xs">{bulkUrls.split(/[\n,]+/).filter(u => u.trim()).length} URLs detected</span>
                 <button onClick={analyzeJob} disabled={analyzing} className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2">
-                  {analyzing? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing {analyzeProgress.current}/{analyzeProgress.total}...</> : <><Search className="w-4 h-4" />Analyze All</>}
+                  {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing {analyzeProgress.current}/{analyzeProgress.total}...</> : <><Search className="w-4 h-4" />Analyze All</>}
                 </button>
               </div>
             </div>
@@ -453,7 +452,7 @@ export default function Home() {
             <div className="flex gap-2">
               <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste job posting URL here..." className="flex-1 bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" onKeyPress={(e) => e.key === 'Enter' && analyzeJob()} />
               <button onClick={analyzeJob} disabled={analyzing} className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2">
-                {analyzing? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
+                {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</> : <><Search className="w-4 h-4" />Analyze</>}
               </button>
             </div>
           )}
@@ -463,7 +462,7 @@ export default function Home() {
             <div className="mt-3 bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
               <button onClick={() => setShowErrorLog(!showErrorLog)} className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800/50">
                 <span className="text-red-400 text-sm font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Error Log ({errorLog.length})</span>
-                {showErrorLog? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                {showErrorLog ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
               </button>
               {showErrorLog && (
                 <div className="border-t border-slate-700 max-h-64 overflow-y-auto">
@@ -495,15 +494,15 @@ export default function Home() {
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="relative grade-dropdown">
             <button onClick={() => { setGradeDropdownOpen(!gradeDropdownOpen); setCategoryDropdownOpen(false); }} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 flex items-center gap-2 min-w-[140px]">
-              <span>{filterGrades.length === 0? 'All Grades' : `${filterGrades.length} Grade${filterGrades.length > 1? 's' : ''}`}</span>
+              <span>{filterGrades.length === 0 ? 'All Grades' : `${filterGrades.length} Grade${filterGrades.length > 1 ? 's' : ''}`}</span>
               <ChevronDown className="w-4 h-4 ml-auto" />
             </button>
             {gradeDropdownOpen && (
               <div className="absolute z-20 mt-1 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
-                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterGrades()} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
+                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterGrades([])} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
                 {Object.entries(GRADE_INFO).map(([key, info]) => (
                   <label key={key} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 cursor-pointer">
-                    <input type="checkbox" checked={filterGrades.includes(key)} onChange={(e) => e.target.checked? setFilterGrades([...filterGrades, key]) : setFilterGrades(filterGrades.filter(g => g!== key))} className="w-4 h-4 rounded" />
+                    <input type="checkbox" checked={filterGrades.includes(key)} onChange={(e) => e.target.checked ? setFilterGrades([...filterGrades, key]) : setFilterGrades(filterGrades.filter(g => g !== key))} className="w-4 h-4 rounded" />
                     <span className={`${info.color} text-white text-xs px-1.5 py-0.5 rounded`}>{'★'.repeat(info.stars)}</span>
                     <span className="text-slate-300 text-sm">{info.desc}</span>
                   </label>
@@ -513,15 +512,15 @@ export default function Home() {
           </div>
           <div className="relative category-dropdown">
             <button onClick={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setGradeDropdownOpen(false); }} className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 flex items-center gap-2 min-w-[160px]">
-              <span>{filterCategories.length === 0? 'All Categories' : `${filterCategories.length} Categor${filterCategories.length > 1? 'ies' : 'y'}`}</span>
+              <span>{filterCategories.length === 0 ? 'All Categories' : `${filterCategories.length} Categor${filterCategories.length > 1 ? 'ies' : 'y'}`}</span>
               <ChevronDown className="w-4 h-4 ml-auto" />
             </button>
             {categoryDropdownOpen && (
               <div className="absolute z-20 mt-1 w-56 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
-                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterCategories()} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
+                <div className="p-2 border-b border-slate-700"><button onClick={() => setFilterCategories([])} className="text-xs text-slate-400 hover:text-emerald-400">Clear all</button></div>
                 {Object.entries(EXPERIENCE_CATEGORIES).map(([key, cat]) => (
                   <label key={key} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-700/50 cursor-pointer">
-                    <input type="checkbox" checked={filterCategories.includes(key)} onChange={(e) => e.target.checked? setFilterCategories([...filterCategories, key]) : setFilterCategories(filterCategories.filter(c => c!== key))} className="w-4 h-4 rounded" />
+                    <input type="checkbox" checked={filterCategories.includes(key)} onChange={(e) => e.target.checked ? setFilterCategories([...filterCategories, key]) : setFilterCategories(filterCategories.filter(c => c !== key))} className="w-4 h-4 rounded" />
                     <span className="text-slate-300 text-sm">{cat.icon} {cat.label}</span>
                   </label>
                 ))}
@@ -551,9 +550,9 @@ export default function Home() {
         </div>
 
         <div className="space-y-3">
-          {initialLoad? (
+          {initialLoad ? (
             <div className="text-center py-12 text-slate-400"><RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 opacity-50" />Loading...</div>
-          ) : filteredJobs.length === 0? (
+          ) : filteredJobs.length === 0 ? (
             <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/50">
               <Briefcase className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-400">No jobs found</p>
@@ -574,23 +573,23 @@ export default function Home() {
                       <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Added {new Date(job.submittedAt).toLocaleDateString()}</span>
                       <ExpiryBadge submittedAt={job.submittedAt} />
                       {job.applyTime && <ApplyTimeBadge applyTime={job.applyTime} />}
-                      {job.salary!== 'Not listed' && <span className="text-emerald-400">{job.salary}</span>}
+                      {job.salary !== 'Not listed' && <span className="text-emerald-400">{job.salary}</span>}
                     </div>
                     <div className="flex items-center gap-3 mt-2">
                       <label className="flex items-center gap-1.5 text-xs">
-                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresDiploma? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresDiploma && <Check className="w-3 h-3" />}</span>
-                        <span className={job.requiresDiploma? 'text-amber-400' : 'text-slate-500'}><GraduationCap className="w-3 h-3 inline mr-1" />Diploma/GED</span>
+                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresDiploma ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresDiploma && <Check className="w-3 h-3" />}</span>
+                        <span className={job.requiresDiploma ? 'text-amber-400' : 'text-slate-500'}><GraduationCap className="w-3 h-3 inline mr-1" />Diploma/GED</span>
                       </label>
                       <label className="flex items-center gap-1.5 text-xs">
-                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresLicense? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresLicense && <Check className="w-3 h-3" />}</span>
-                        <span className={job.requiresLicense? 'text-amber-400' : 'text-slate-500'}><Car className="w-3 h-3 inline mr-1" />License</span>
+                        <span className={`flex items-center justify-center w-4 h-4 rounded border ${job.requiresLicense ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'border-slate-600 text-slate-600'}`}>{job.requiresLicense && <Check className="w-3 h-3" />}</span>
+                        <span className={job.requiresLicense ? 'text-amber-400' : 'text-slate-500'}><Car className="w-3 h-3 inline mr-1" />License</span>
                       </label>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <ApplyModal job={job} />
-                    <button onClick={() => setExpandedJob(expandedJob === job.id? null : job.id)} className="p-2 text-slate-400 hover:text-white">
-                      {expandedJob === job.id? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    <button onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)} className="p-2 text-slate-400 hover:text-white">
+                      {expandedJob === job.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </button>
                   </div>
                 </div>
