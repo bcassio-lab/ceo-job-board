@@ -63,7 +63,7 @@ ${description}`;
 
     // Make the API call to Gemini
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // We use 2.5-flash as it is highly optimized for text extraction tasks
+      model: "claude-sonnet-4-6", // We use 2.5-flash as it is highly optimized for text extraction tasks
       contents: promptText,
       config: {
         responseMimeType: "application/json",
