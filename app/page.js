@@ -32,12 +32,12 @@ const GRADE_INFO = {
 };
 
 export default function Home() {
-  const [jobs, setJobs] = useState();
-  const [url, setUrl] = useState('');
-  const = useState('');
-  const = useState(false);
-  const [manualMode, setManualMode] = useState(false);
-  const = useState('');
+ 35 |   const [jobs, setJobs] = useState();
+ 36 |   const [url, setUrl] = useState('');
+ 37 |   const = useState('');              // <-- Missing variable names
+ 38 |   const = useState(false);           // <-- Missing variable names
+ 39 |   const [manualMode, setManualMode] = useState(false);
+ 40 |   const = useState('');              // <-- Missing variable names
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0 });
