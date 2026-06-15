@@ -8,7 +8,7 @@ export async function POST(request) {
   try {
     const { url: jobUrl, description } = await request.json();
 
-    if (!jobUrl ||!description) {
+    if (!jobUrl || !description) {
       return NextResponse.json({ error: "URL and description are required" }, { status: 400 });
     }
 
@@ -46,7 +46,19 @@ ${description}`;
           description: "estimated time range to complete the application, e.g. '5-10 min', '15-25 min', '30-45 min', '45-60 min'. If walk-in or email only, say '5 min (walk-in)' or '5 min (email)'"
         }
       },
-      required:
+      // FIX: Added the required array
+      required: [
+        "jobTitle", 
+        "company", 
+        "location", 
+        "grade", 
+        "gradeReason", 
+        "experienceCategory", 
+        "ceoMatch", 
+        "requiresDiploma", 
+        "requiresLicense", 
+        "applyTimeEstimate"
+      ]
     };
 
     // Make the API call to Gemini
@@ -82,7 +94,7 @@ ${description}`;
       requiresDiploma: analysis.requiresDiploma || false,
       requiresLicense: analysis.requiresLicense || false,
       applyTime: analysis.applyTimeEstimate || "10-15 min",
-      datePosted: new Date().toISOString().split("T"),
+      datePosted: new Date().toISOString().split("T")[0], // FIX: Added [0] to get just the date string
       expirationDate: null,
       submittedAt: new Date().toISOString(),
       submittedBy: "CEO Fresno Staff",
