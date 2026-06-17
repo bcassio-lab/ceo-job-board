@@ -4,7 +4,7 @@ import { useState } from 'react';
 export default function ApplyModal({ job }) {
   const [isOpen, setIsOpen] = useState(false);
   const [ceoId, setCeoId] = useState('');
-  const = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleApply = async (e) => {
     e.preventDefault();
