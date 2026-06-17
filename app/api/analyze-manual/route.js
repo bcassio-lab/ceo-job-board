@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
-// The SDK automatically picks up the ANTHROPIC_API_KEY environment variable
 const anthropic = new Anthropic();
 
 export async function POST(request) {
@@ -21,8 +20,6 @@ ${description}
 
 Use the record_job_analysis tool to return your analysis.`;
 
-    // The structure we want Claude to return, as a plain JSON Schema.
-    // (Gemini used Type.OBJECT / Type.STRING — Anthropic uses lowercase string types.)
     const jobSchema = {
       type: "object",
       properties: {
@@ -68,12 +65,10 @@ Use the record_job_analysis tool to return your analysis.`;
       ]
     };
 
-    // Call Claude and FORCE it to use our tool, so the response always
-    // matches the schema above. This is the equivalent of Gemini's responseSchema.
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6", // good balance for the judgment in grading; swap to "claude-haiku-4-5" for faster/cheaper
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      temperature: 0.1, // low temperature keeps extraction factual and deterministic
+      temperature: 0.1,
       tools: [
         {
           name: "record_job_analysis",
@@ -85,7 +80,6 @@ Use the record_job_analysis tool to return your analysis.`;
       messages: [{ role: "user", content: promptText }]
     });
 
-    // Pull the structured data out of the tool_use block Claude returns.
     const toolUse = response.content.find((block) => block.type === "tool_use");
 
     if (!toolUse) {
